@@ -1,0 +1,26 @@
+{
+  "name": "@breadcrumb/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@trpc/client": "^11",
+    "@trpc/react-query": "^11",
+    "@tanstack/react-query": "^5",
+    "react": "^19",
+    "react-dom": "^19",
+    "superjson": "^2"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^4",
+    "typescript": "^5.7",
+    "vite": "^6"
+  }
+}
