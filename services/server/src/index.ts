@@ -6,6 +6,7 @@ import { authRoutes, requireSession, requireApiKey } from "./auth/index.js";
 import { trpcHandler } from "./trpc/index.js";
 import { ingestRoutes } from "./ingest/index.js";
 import { env } from "./env.js";
+import { readFile } from "node:fs/promises";
 
 const app = new Hono();
 
@@ -26,8 +27,14 @@ app.use("/trpc/*", trpcHandler);
 
 // In production, serve the built web app
 if (env.nodeEnv === "production") {
+  // Serve static assets (js, css, etc.)
   app.use("/*", serveStatic({ root: "./public" }));
-  app.use("/*", serveStatic({ path: "./public/index.html" }));
+
+  // SPA fallback — serve index.html for any unmatched route
+  app.get("*", async (c) => {
+    const html = await readFile("./public/index.html", "utf-8");
+    return c.html(html);
+  });
 }
 
 console.log(`server listening on port ${env.port}`);

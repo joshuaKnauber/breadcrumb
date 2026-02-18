@@ -1,26 +1,37 @@
-FROM node:20-alpine AS base
+FROM node:20-alpine AS build
 WORKDIR /app
 
-# Install all workspace deps
-COPY package.json ./
-COPY apps/web/package.json ./apps/web/
+# Copy all package.jsons for workspace resolution
+COPY package.json package-lock.json ./
+COPY packages/core/package.json ./packages/core/
+COPY packages/sdk-typescript/package.json ./packages/sdk-typescript/
 COPY services/server/package.json ./services/server/
-RUN npm install --workspaces
+COPY apps/web/package.json ./apps/web/
 
-# Build web app
-COPY apps/web ./apps/web
-RUN npm run build -w @breadcrumb/web
+# Install all workspace deps
+RUN npm ci
 
-# Build server
+# Copy source
+COPY packages ./packages
 COPY services/server ./services/server
-RUN npm run build -w @breadcrumb/server
+COPY apps/web ./apps/web
+COPY tsconfig.base.json turbo.json ./
+
+# Build everything
+RUN npx turbo run build
 
 # Production image
-FROM base AS runner
+FROM node:20-alpine AS runner
+WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=0 /app/services/server/dist ./dist
-COPY --from=0 /app/services/server/node_modules ./node_modules
-COPY --from=0 /app/services/server/package.json ./
-COPY --from=0 /app/apps/web/dist ./public
+
+# Copy server build + dependencies
+COPY --from=build /app/services/server/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/services/server/package.json ./
+
+# Copy web build as static files
+COPY --from=build /app/apps/web/dist ./public
+
 EXPOSE 3100
 CMD ["node", "dist/index.js"]
