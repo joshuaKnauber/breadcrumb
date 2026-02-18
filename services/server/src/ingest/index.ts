@@ -22,6 +22,11 @@ function toJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
+// ClickHouse DateTime64 expects "YYYY-MM-DD HH:MM:SS.mmm" not ISO 8601.
+function toChDate(iso: string): string {
+  return iso.replace("T", " ").replace("Z", "");
+}
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 export const ingestRoutes = new Hono<{ Variables: Variables }>();
@@ -54,8 +59,8 @@ ingestRoutes.post("/traces", async (c) => {
       project_id:     projectId,
       version:        Date.now(),
       name:           t.name,
-      start_time:     t.start_time,
-      end_time:       t.end_time ?? "1970-01-01T00:00:00.000Z",
+      start_time:     toChDate(t.start_time),
+      end_time:       toChDate(t.end_time ?? "1970-01-01T00:00:00.000Z"),
       status:         t.status,
       status_message: t.status_message ?? "",
       input:          toJson(t.input),
@@ -98,8 +103,8 @@ ingestRoutes.post("/spans", async (c) => {
       project_id:     projectId,
       name:           s.name,
       type:           s.type,
-      start_time:     s.start_time,
-      end_time:       s.end_time,
+      start_time:     toChDate(s.start_time),
+      end_time:       toChDate(s.end_time),
       status:         s.status,
       status_message: s.status_message ?? "",
       input:          toJson(s.input),
