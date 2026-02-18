@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { Plus, Folder } from "@phosphor-icons/react";
 import { trpc } from "../../lib/trpc";
 
 export const Route = createFileRoute("/_authed/")({
@@ -6,20 +7,54 @@ export const Route = createFileRoute("/_authed/")({
 });
 
 function IndexPage() {
-  const health = trpc.health.useQuery();
+  const projects = trpc.projects.list.useQuery();
+
+  if (projects.isLoading) return null;
 
   return (
-    <main className="p-6">
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-6">
-        <h2 className="text-sm font-medium text-zinc-400">Server Status</h2>
-        <p className="mt-1 text-2xl font-semibold">
-          {health.data?.status === "ok" ? (
-            <span className="text-emerald-400">Connected</span>
-          ) : (
-            <span className="text-zinc-500">Connecting...</span>
-          )}
-        </p>
+    <main className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Projects</h2>
+        <Link
+          to="/new"
+          className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
+        >
+          <Plus size={16} />
+          New project
+        </Link>
       </div>
+
+      {projects.data?.length ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {projects.data.map((project) => (
+            <Link
+              key={project.id}
+              to="/projects/$projectId"
+              params={{ projectId: project.id }}
+              className="rounded-lg border border-zinc-800 bg-zinc-900 p-4 space-y-3 hover:border-zinc-700 transition-colors"
+            >
+              <div className="flex items-center gap-2.5">
+                <Folder size={18} className="text-zinc-500" />
+                <span className="text-sm font-medium">{project.name}</span>
+              </div>
+              <p className="text-xs text-zinc-500">
+                Created {new Date(project.createdAt).toLocaleDateString()}
+              </p>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-700 py-16 text-center">
+          <Folder size={32} className="text-zinc-600 mb-3" />
+          <p className="text-sm text-zinc-400">No projects yet</p>
+          <Link
+            to="/new"
+            className="mt-3 text-sm text-zinc-300 underline underline-offset-4 hover:text-zinc-100 transition-colors"
+          >
+            Create your first project
+          </Link>
+        </div>
+      )}
     </main>
   );
 }

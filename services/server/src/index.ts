@@ -2,11 +2,13 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { readFile } from "node:fs/promises";
 import { authRoutes, requireSession, requireApiKey } from "./auth/index.js";
 import { trpcHandler } from "./trpc/index.js";
 import { ingestRoutes } from "./ingest/index.js";
+import { runMigrations } from "./db/index.js";
+import { runClickhouseMigrations } from "./db/clickhouse.js";
 import { env } from "./env.js";
-import { readFile } from "node:fs/promises";
 
 const app = new Hono();
 
@@ -14,28 +16,30 @@ app.use("*", cors());
 
 app.get("/health", (c) => c.json({ status: "ok" }));
 
-// Auth routes (public)
 app.route("/auth", authRoutes);
 
-// SDK ingest (API key)
 app.use("/v1/*", requireApiKey);
 app.route("/v1", ingestRoutes);
 
-// tRPC for web UI (session cookie)
 app.use("/trpc/*", requireSession);
 app.use("/trpc/*", trpcHandler);
 
-// In production, serve the built web app
 if (env.nodeEnv === "production") {
-  // Serve static assets (js, css, etc.)
   app.use("/*", serveStatic({ root: "./public" }));
-
-  // SPA fallback — serve index.html for any unmatched route
   app.get("*", async (c) => {
     const html = await readFile("./public/index.html", "utf-8");
     return c.html(html);
   });
 }
 
-console.log(`server listening on port ${env.port}`);
-serve({ fetch: app.fetch, port: env.port });
+async function main() {
+  await runMigrations();
+  await runClickhouseMigrations();
+  serve({ fetch: app.fetch, port: env.port });
+  console.log(`server listening on port ${env.port}`);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

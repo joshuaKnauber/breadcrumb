@@ -1,4 +1,10 @@
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Outlet,
+  useNavigate,
+  Link,
+} from "@tanstack/react-router";
+import { SignOut } from "@phosphor-icons/react";
 import { useAuth } from "../hooks/useAuth";
 
 export const Route = createFileRoute("/_authed")({
@@ -18,12 +24,15 @@ function AuthedLayout() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <header className="flex items-center justify-between border-b border-zinc-800 px-6 py-4">
-        <h1 className="text-lg font-semibold tracking-tight">Breadcrumb</h1>
+      <header className="flex items-center justify-between border-b border-zinc-800 px-6 py-3">
+        <Link to="/" className="text-lg font-semibold tracking-tight">
+          Breadcrumb
+        </Link>
         <button
           onClick={() => auth.logout().then(() => navigate({ to: "/login" }))}
-          className="rounded-md px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
+          className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
         >
+          <SignOut size={16} />
           Logout
         </button>
       </header>

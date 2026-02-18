@@ -15,6 +15,7 @@ RUN npm ci
 COPY packages ./packages
 COPY services/server ./services/server
 COPY apps/web ./apps/web
+COPY infra/clickhouse/migrations ./infra/clickhouse/migrations
 COPY tsconfig.base.json turbo.json ./
 
 # Build everything
@@ -32,6 +33,9 @@ COPY --from=build /app/services/server/package.json ./
 
 # Copy web build as static files
 COPY --from=build /app/apps/web/dist ./public
+
+# Copy ClickHouse migrations — read at runtime by the migration runner
+COPY --from=build /app/infra/clickhouse/migrations ./migrations/clickhouse
 
 EXPOSE 3100
 CMD ["node", "dist/index.js"]
