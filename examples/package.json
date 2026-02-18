@@ -1,0 +1,19 @@
+{
+  "name": "@breadcrumb/examples",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "simple":   "tsx 01-simple.ts",
+    "pipeline": "tsx 02-pipeline.ts",
+    "agent":    "tsx 03-agent.ts",
+    "error":    "tsx 04-error.ts"
+  },
+  "dependencies": {
+    "@breadcrumb/sdk": "*",
+    "dotenv": "^16"
+  },
+  "devDependencies": {
+    "tsx": "^4",
+    "typescript": "^5.7"
+  }
+}
