@@ -4,7 +4,7 @@ import { SignJWT, jwtVerify } from "jose";
 import { eq } from "drizzle-orm";
 import { env } from "../env.js";
 import { db } from "../db/index.js";
-import { apiKeys } from "../db/schema.js";
+import { apiKeys, mcpKeys } from "../db/schema.js";
 import { hashApiKey } from "../lib/api-keys.js";
 import type { Context, Next } from "hono";
 
@@ -110,6 +110,49 @@ export async function requireApiKey(c: Context, next: Next) {
   const projectId = await resolveApiKey(hashApiKey(key));
   if (!projectId) {
     return c.json({ error: "Invalid API key" }, 401);
+  }
+
+  c.set("projectId", projectId);
+  await next();
+}
+
+const mcpKeyCache = new Map<string, { projectId: string; expiresAt: number }>();
+
+async function resolveMcpKey(hash: string): Promise<string | null> {
+  const cached = mcpKeyCache.get(hash);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.projectId;
+  }
+
+  const [found] = await db
+    .select({ projectId: mcpKeys.projectId })
+    .from(mcpKeys)
+    .where(eq(mcpKeys.keyHash, hash))
+    .limit(1);
+
+  if (!found) {
+    mcpKeyCache.delete(hash);
+    return null;
+  }
+
+  mcpKeyCache.set(hash, {
+    projectId: found.projectId,
+    expiresAt: Date.now() + KEY_CACHE_TTL,
+  });
+  return found.projectId;
+}
+
+export async function requireMcpKey(c: Context, next: Next) {
+  const header = c.req.header("Authorization");
+  const key = header?.startsWith("Bearer ") ? header.slice(7) : null;
+
+  if (!key) {
+    return c.json({ error: "Missing MCP key" }, 401);
+  }
+
+  const projectId = await resolveMcpKey(hashApiKey(key));
+  if (!projectId) {
+    return c.json({ error: "Invalid MCP key" }, 401);
   }
 
   c.set("projectId", projectId);

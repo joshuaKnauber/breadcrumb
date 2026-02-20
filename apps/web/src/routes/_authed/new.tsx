@@ -1,8 +1,9 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { ArrowLeft, Copy, Check, ArrowRight } from "@phosphor-icons/react";
+import { Copy, Check, ArrowRight } from "@phosphor-icons/react";
 import { trpc } from "../../lib/trpc";
 import { StepIndicator } from "../../components/StepIndicator";
+import { AppHeader } from "../../components/AppHeader";
 
 export const Route = createFileRoute("/_authed/new")({
   component: NewProjectPage,
@@ -46,15 +47,11 @@ function NewProjectPage() {
   };
 
   return (
+    <>
+    <AppHeader />
     <div className="flex min-h-[calc(100vh-57px)] items-center justify-center px-4">
       <div className="w-full max-w-md space-y-8">
         <div className="flex items-center gap-4">
-          <Link
-            to="/"
-            className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
-          >
-            <ArrowLeft size={18} />
-          </Link>
           <StepIndicator steps={STEPS} current={step} />
         </div>
 
@@ -131,5 +128,6 @@ function NewProjectPage() {
         )}
       </div>
     </div>
+    </>
   );
 }

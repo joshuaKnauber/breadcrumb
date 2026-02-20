@@ -20,7 +20,9 @@
   },
   "dependencies": {
     "@clickhouse/client": "^1",
+    "@hono/mcp": "^0.2.3",
     "@hono/node-server": "^1",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@trpc/server": "^11",
     "dotenv": "^16",
     "drizzle-orm": "^0.39",

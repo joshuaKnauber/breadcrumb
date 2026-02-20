@@ -6,7 +6,8 @@
     "simple":   "tsx 01-simple.ts",
     "pipeline": "tsx 02-pipeline.ts",
     "agent":    "tsx 03-agent.ts",
-    "error":    "tsx 04-error.ts"
+    "error":    "tsx 04-error.ts",
+    "seed-many": "tsx seed-many.ts"
   },
   "dependencies": {
     "@breadcrumb/sdk": "*",

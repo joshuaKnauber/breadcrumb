@@ -12,10 +12,12 @@
 --      deduplicates in the background, keeping the highest version.
 --      Query with argMax(), not FINAL — see traces table below.
 --
---   3. SummingMergeTree + materialized view for rollups. Every
---      span insert automatically feeds trace_rollups via a
---      materialized view. CH merges rows in the background.
---      Always query with explicit GROUP BY + sum(), not FINAL.
+--   3. AggregatingMergeTree + SimpleAggregateFunction for rollups.
+--      Every span insert automatically feeds trace_rollups via a
+--      materialized view. CH merges rows in the background using
+--      the declared aggregate function (sum or max).
+--      Always query with the matching aggregate function (sum(),
+--      max()) and explicit GROUP BY — not FINAL.
 --
 --   4. Costs stored as UInt64 micro-dollars (1 USD = 1_000_000).
 --      Float64 accumulates precision errors when summing many
@@ -26,8 +28,13 @@
 --      (status, type, provider, environment). Dramatically reduces
 --      storage and speeds up filtering on these columns.
 --
---   6. No Nullable columns. ClickHouse performs better with empty
---      string / zero defaults than with Nullable types.
+--   6. traces.end_time is Nullable. The first row (trace.start())
+--      inserts NULL — the trace appears in the dashboard immediately.
+--      If trace.end() is called, a second row with a real end_time
+--      overwrites it (ReplacingMergeTree, higher version).
+--      Trace duration is always derived from span times via
+--      trace_rollups.max_end_time, so a missing trace.end_time
+--      never causes a broken duration display.
 --
 -- ============================================================
 
@@ -52,23 +59,19 @@ CREATE DATABASE IF NOT EXISTS breadcrumb;
 --
 --   SELECT
 --     id,
---     argMax(name, version)          AS name,
---     argMax(start_time, version)    AS start_time,
---     argMax(end_time, version)      AS end_time,
---     argMax(status, version)        AS status,
+--     argMax(name, version)           AS name,
+--     argMax(start_time, version)     AS start_time,
+--     argMax(end_time, version)       AS end_time,   -- Nullable
+--     argMax(status, version)         AS status,
 --     argMax(status_message, version) AS status_message,
---     argMax(input, version)         AS input,
---     argMax(output, version)        AS output,
---     argMax(user_id, version)       AS user_id,
---     argMax(session_id, version)    AS session_id,
---     argMax(environment, version)   AS environment,
---     argMax(tags, version)          AS tags
+--     argMax(user_id, version)        AS user_id,
+--     argMax(environment, version)    AS environment
 --   FROM breadcrumb.traces
 --   WHERE project_id = ?
 --   GROUP BY id
 --
--- This reads all rows for each trace_id and picks the value
--- from the highest version, which is correct and parallelisable.
+-- end_time is NULL when only trace.start() has been received.
+-- Use COALESCE(end_time, rollup.max_end_time) for duration.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS breadcrumb.traces
@@ -82,19 +85,18 @@ CREATE TABLE IF NOT EXISTS breadcrumb.traces
     name        String,
     start_time  DateTime64(3, 'UTC'),
 
-    -- Set on trace.end() — zero/empty in the version=1 row
-    end_time       DateTime64(3, 'UTC') DEFAULT toDateTime64(0, 3, 'UTC'),
+    -- Nullable: NULL in the version=1 row (trace.start()), real value in version=2 (trace.end())
+    -- Duration is always derived from span times — see trace_rollups.max_end_time
+    end_time       Nullable(DateTime64(3, 'UTC')),
     status         LowCardinality(String) DEFAULT 'ok', -- 'ok' | 'error'
     status_message String DEFAULT '',
     input          String DEFAULT '', -- JSON: initial input to the trace
     output         String DEFAULT '', -- JSON: final output of the trace
 
     -- Resource attributes for filtering traces
-    -- These are indexed via the ORDER BY key — keep cardinality reasonable.
-    -- user_id / session_id are arbitrary strings from the SDK caller.
     user_id     String DEFAULT '',
     session_id  String DEFAULT '',
-    environment LowCardinality(String) DEFAULT '', -- 'production' | 'staging' | ...
+    environment LowCardinality(String) DEFAULT '',
 
     -- Arbitrary key-value pairs for any extra filtering needs.
     -- Query: WHERE tags['key'] = 'value'
@@ -109,21 +111,6 @@ ORDER BY (project_id, id);
 -- ============================================================
 -- Append-only. One row inserted per span when span.end() is
 -- called by the SDK. Rows are never updated or deleted.
---
--- ORDER BY (project_id, trace_id, start_time, id):
---   - Fetching all spans for a trace is a sequential range scan
---     on (project_id, trace_id) — no secondary index needed.
---   - Spans within a trace are physically sorted by start_time,
---     so tree reconstruction reads data in causal order.
---   - id is appended to the key to ensure uniqueness when two
---     spans start at the same millisecond.
---
--- LLM-specific columns (model, tokens, cost) are zero/empty
--- for non-LLM span types. There is no separate table per type —
--- a single wide table is simpler to query and works well in CH.
---
--- Costs are stored as UInt64 micro-dollars.
--- See schema design note #4 above.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS breadcrumb.spans
@@ -138,7 +125,7 @@ CREATE TABLE IF NOT EXISTS breadcrumb.spans
     name String,
     type LowCardinality(String), -- 'llm' | 'tool' | 'retrieval' | 'chain' | 'custom'
 
-    -- Timing
+    -- Timing (always present — spans are only inserted on span.end())
     start_time DateTime64(3, 'UTC'),
     end_time   DateTime64(3, 'UTC'),
 
@@ -147,20 +134,16 @@ CREATE TABLE IF NOT EXISTS breadcrumb.spans
     status_message String DEFAULT '',
 
     -- Input / output (always JSON strings)
-    -- llm spans:    input = messages array, output = completion
-    -- tool spans:   input = tool arguments, output = tool result
-    -- other spans:  input/output = arbitrary JSON
     input  String DEFAULT '',
     output String DEFAULT '',
 
     -- LLM-specific fields (zero/empty for non-LLM spans)
-    provider LowCardinality(String) DEFAULT '', -- 'openai' | 'anthropic' | 'google' | ...
-    model    LowCardinality(String) DEFAULT '', -- 'gpt-4o' | 'claude-3-5-sonnet-...' | ...
+    provider LowCardinality(String) DEFAULT '',
+    model    LowCardinality(String) DEFAULT '',
     input_tokens  UInt32 DEFAULT 0,
     output_tokens UInt32 DEFAULT 0,
 
     -- Micro-dollars: 1 USD = 1_000_000. Divide by 1_000_000 at display time.
-    -- Stored as UInt64 to avoid Float64 precision loss when summing many spans.
     input_cost_usd  UInt64 DEFAULT 0,
     output_cost_usd UInt64 DEFAULT 0,
 
@@ -174,43 +157,45 @@ ORDER BY (project_id, trace_id, start_time, id);
 -- ============================================================
 -- trace_rollups
 -- ============================================================
--- Accumulated token and cost totals per trace.
--- Populated automatically by spans_to_rollups (below) —
--- never written to directly by application code.
+-- Accumulated token, cost, span count, and max end time per trace.
+-- Populated automatically by spans_to_rollups (below).
 --
--- SummingMergeTree merges rows with the same ORDER BY key
--- (project_id, trace_id) in the background, summing all
--- numeric columns. This reduces scan size over time but
--- the merge is NOT guaranteed to have happened at read time.
+-- Uses AggregatingMergeTree with SimpleAggregateFunction columns.
+-- SimpleAggregateFunction stores partial values directly (no
+-- state serialisation needed) and merges them in the background
+-- using the declared function (sum or max).
 --
--- ALWAYS query with explicit GROUP BY + sum():
+-- ALWAYS query with the matching aggregate function and GROUP BY:
 --
 --   SELECT
 --     trace_id,
 --     sum(input_tokens)                     AS input_tokens,
 --     sum(output_tokens)                    AS output_tokens,
 --     sum(input_cost_usd + output_cost_usd) AS total_cost_usd,
---     sum(span_count)                       AS span_count
+--     sum(span_count)                       AS span_count,
+--     max(max_end_time)                     AS max_end_time
 --   FROM breadcrumb.trace_rollups
 --   WHERE project_id = ?
 --   GROUP BY trace_id
 --
--- Do not use FINAL — same reasons as for traces above.
+-- max_end_time = the latest span.end_time for this trace.
+-- Use COALESCE(trace.end_time, rollup.max_end_time) for duration
+-- so that traces without an explicit trace.end() call still show
+-- a real duration as long as they have at least one completed span.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS breadcrumb.trace_rollups
 (
     project_id      UUID,
     trace_id        String,
-    input_tokens    UInt64 DEFAULT 0,
-    output_tokens   UInt64 DEFAULT 0,
-    input_cost_usd  UInt64 DEFAULT 0,
-    output_cost_usd UInt64 DEFAULT 0,
-    span_count      UInt32 DEFAULT 0
+    input_tokens    SimpleAggregateFunction(sum, UInt64),
+    output_tokens   SimpleAggregateFunction(sum, UInt64),
+    input_cost_usd  SimpleAggregateFunction(sum, UInt64),
+    output_cost_usd SimpleAggregateFunction(sum, UInt64),
+    span_count      SimpleAggregateFunction(sum, UInt64),
+    max_end_time    SimpleAggregateFunction(max, DateTime64(3, 'UTC'))
 )
-ENGINE = SummingMergeTree()
--- No time-based partitioning: this table has at most one row per trace
--- and is always queried by (project_id, trace_id). Small and fast.
+ENGINE = AggregatingMergeTree()
 PARTITION BY tuple()
 ORDER BY (project_id, trace_id);
 
@@ -218,13 +203,8 @@ ORDER BY (project_id, trace_id);
 -- spans_to_rollups (materialized view)
 -- ============================================================
 -- Fires on every INSERT into breadcrumb.spans.
--- Extracts the cost/token fields from each new span row and
--- inserts them into trace_rollups, where SummingMergeTree
--- accumulates them.
---
--- Does NOT fire on UPDATE or DELETE — we never do either,
--- so this is safe. If spans ever need to be corrected or
--- backfilled, trace_rollups must be rebuilt manually.
+-- Extracts cost/token fields and the span end_time, inserting
+-- them into trace_rollups for background aggregation.
 -- ============================================================
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS breadcrumb.spans_to_rollups
@@ -236,5 +216,6 @@ SELECT
     output_tokens,
     input_cost_usd,
     output_cost_usd,
-    1 AS span_count
+    1            AS span_count,
+    end_time     AS max_end_time
 FROM breadcrumb.spans;

@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plus, Folder } from "@phosphor-icons/react";
 import { trpc } from "../../lib/trpc";
+import { AppHeader } from "../../components/AppHeader";
 
 export const Route = createFileRoute("/_authed/")({
   component: IndexPage,
@@ -12,6 +13,8 @@ function IndexPage() {
   if (projects.isLoading) return null;
 
   return (
+    <>
+    <AppHeader />
     <main className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Projects</h2>
@@ -56,5 +59,6 @@ function IndexPage() {
         </div>
       )}
     </main>
+    </>
   );
 }

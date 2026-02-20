@@ -57,10 +57,13 @@ ingestRoutes.post("/traces", async (c) => {
     values: [{
       id:             t.id,
       project_id:     projectId,
-      version:        Date.now(),
+      // Use the event's own timestamp as the version so ordering is always
+      // correct even if start and end arrive concurrently (Promise.all in SDK).
+      // end_time is always later than start_time, so the end row always wins.
+      version:        t.end_time ? new Date(t.end_time).getTime() : new Date(t.start_time).getTime(),
       name:           t.name,
       start_time:     toChDate(t.start_time),
-      end_time:       toChDate(t.end_time ?? "1970-01-01T00:00:00.000Z"),
+      end_time:       t.end_time ? toChDate(t.end_time) : null,
       status:         t.status,
       status_message: t.status_message ?? "",
       input:          toJson(t.input),

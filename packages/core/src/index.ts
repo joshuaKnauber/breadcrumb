@@ -1,6 +1,13 @@
-// Shared types — will be expanded when we design the schema
-export interface LLMSpan {
-  traceId: string;
-  spanId: string;
-  parentSpanId?: string;
-}
+export type {
+  TraceId,
+  SpanId,
+  SpanType,
+  Status,
+  TracePayload,
+  SpanPayload,
+} from "./types.js";
+
+export { generateTraceId, generateSpanId } from "./ids.js";
+
+export { IngestClient } from "./client.js";
+export type { IngestClientOptions } from "./client.js";

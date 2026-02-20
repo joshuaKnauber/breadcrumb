@@ -18,6 +18,7 @@ export default defineConfig({
       "/trpc": "http://localhost:3100",
       "/auth": "http://localhost:3100",
       "/v1": "http://localhost:3100",
+      "/mcp": "http://localhost:3100",
     },
   },
 });

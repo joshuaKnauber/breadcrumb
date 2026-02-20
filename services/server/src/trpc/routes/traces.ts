@@ -2,21 +2,42 @@ import { z } from "zod";
 import { router, procedure } from "../trpc.js";
 import { clickhouse } from "../../db/clickhouse.js";
 
+// Reusable rollups subquery fragment.
+// max(max_end_time) gives the latest span end time for each trace,
+// used as a fallback when trace.end_time is NULL.
+const ROLLUPS_SUBQUERY = (projectIdParam: string) => `
+  SELECT
+    trace_id,
+    sum(input_tokens)                     AS input_tokens,
+    sum(output_tokens)                    AS output_tokens,
+    sum(input_cost_usd)                   AS input_cost_usd,
+    sum(output_cost_usd)                  AS output_cost_usd,
+    sum(span_count)                       AS span_count,
+    max(max_end_time)                     AS max_end_time
+  FROM breadcrumb.trace_rollups
+  WHERE project_id = {${projectIdParam}: UUID}
+  GROUP BY trace_id
+`;
+
 export const tracesRouter = router({
   // Aggregated stats for the project dashboard header cards.
-  // Joins traces with trace_rollups to get totals.
   stats: procedure
     .input(z.object({ projectId: z.string().uuid() }))
     .query(async ({ input }) => {
       const result = await clickhouse.query({
         query: `
           SELECT
-            count()                          AS trace_count,
-            sum(r.total_cost_usd)            AS total_cost_usd
+            count()                AS trace_count,
+            sum(r.total_cost_usd)  AS total_cost_usd,
+            avgIf(
+              toInt64(toUnixTimestamp64Milli(COALESCE(t.end_time, r.max_end_time))) - toInt64(toUnixTimestamp64Milli(t.start_time)),
+              isNotNull(COALESCE(t.end_time, r.max_end_time)) AND COALESCE(t.end_time, r.max_end_time) > t.start_time
+            )                      AS avg_duration_ms
           FROM (
             SELECT
               id,
-              argMax(status, version) AS status
+              argMax(start_time, version) AS start_time,
+              argMax(end_time, version)   AS end_time
             FROM breadcrumb.traces
             WHERE project_id = {projectId: UUID}
             GROUP BY id
@@ -24,7 +45,8 @@ export const tracesRouter = router({
           LEFT JOIN (
             SELECT
               trace_id,
-              sum(input_cost_usd + output_cost_usd) AS total_cost_usd
+              sum(input_cost_usd + output_cost_usd) AS total_cost_usd,
+              max(max_end_time)                      AS max_end_time
             FROM breadcrumb.trace_rollups
             WHERE project_id = {projectId: UUID}
             GROUP BY trace_id
@@ -39,14 +61,11 @@ export const tracesRouter = router({
 
       return {
         traceCount: Number(row["trace_count"] ?? 0),
-        // Stored as micro-dollars — divide by 1_000_000 for display
         totalCostUsd: Number(row["total_cost_usd"] ?? 0) / 1_000_000,
       };
     }),
 
   // Paginated trace list for the dashboard table.
-  // Uses argMax to resolve the latest version of each trace row,
-  // and joins trace_rollups for per-trace token/cost totals.
   list: procedure
     .input(
       z.object({
@@ -59,18 +78,18 @@ export const tracesRouter = router({
       const result = await clickhouse.query({
         query: `
           SELECT
-            t.id                                              AS id,
-            t.name                                            AS name,
-            t.status                                          AS status,
-            t.status_message                                  AS status_message,
-            t.start_time                                      AS start_time,
-            t.end_time                                        AS end_time,
-            t.user_id                                         AS user_id,
-            t.environment                                     AS environment,
-            coalesce(r.input_tokens, 0)                       AS input_tokens,
-            coalesce(r.output_tokens, 0)                      AS output_tokens,
-            coalesce(r.input_cost_usd + r.output_cost_usd, 0) AS cost_usd,
-            coalesce(r.span_count, 0)                         AS span_count
+            t.id,
+            t.name,
+            t.status,
+            t.status_message,
+            t.start_time,
+            COALESCE(t.end_time, r.max_end_time)               AS end_time,
+            t.user_id,
+            t.environment,
+            coalesce(r.input_tokens, 0)                        AS input_tokens,
+            coalesce(r.output_tokens, 0)                       AS output_tokens,
+            coalesce(r.input_cost_usd + r.output_cost_usd, 0)  AS cost_usd,
+            coalesce(r.span_count, 0)                          AS span_count
           FROM (
             SELECT
               id,
@@ -86,16 +105,7 @@ export const tracesRouter = router({
             GROUP BY id
           ) t
           LEFT JOIN (
-            SELECT
-              trace_id,
-              sum(input_tokens)                     AS input_tokens,
-              sum(output_tokens)                    AS output_tokens,
-              sum(input_cost_usd)                   AS input_cost_usd,
-              sum(output_cost_usd)                  AS output_cost_usd,
-              sum(span_count)                       AS span_count
-            FROM breadcrumb.trace_rollups
-            WHERE project_id = {projectId: UUID}
-            GROUP BY trace_id
+            ${ROLLUPS_SUBQUERY("projectId")}
           ) r ON t.id = r.trace_id
           ORDER BY t.start_time DESC
           LIMIT {limit: UInt32} OFFSET {offset: UInt32}
@@ -116,19 +126,54 @@ export const tracesRouter = router({
         status:        String(r["status"]) as "ok" | "error",
         statusMessage: String(r["status_message"] ?? ""),
         startTime:     String(r["start_time"]),
-        endTime:       String(r["end_time"]),
+        endTime:       r["end_time"] != null ? String(r["end_time"]) : null,
         userId:        String(r["user_id"] ?? ""),
         environment:   String(r["environment"] ?? ""),
         inputTokens:   Number(r["input_tokens"] ?? 0),
         outputTokens:  Number(r["output_tokens"] ?? 0),
-        // Micro-dollars → dollars
         costUsd:       Number(r["cost_usd"] ?? 0) / 1_000_000,
         spanCount:     Number(r["span_count"] ?? 0),
       }));
     }),
 
+  // Traces grouped by day, for the sparkline on the Overview page.
+  dailyCount: procedure
+    .input(
+      z.object({
+        projectId: z.string().uuid(),
+        days: z.number().int().min(1).max(90).default(30),
+      })
+    )
+    .query(async ({ input }) => {
+      const result = await clickhouse.query({
+        query: `
+          SELECT
+            toDate(start_time) AS day,
+            count()            AS trace_count
+          FROM (
+            SELECT
+              id,
+              argMax(start_time, version) AS start_time
+            FROM breadcrumb.traces
+            WHERE project_id = {projectId: UUID}
+            GROUP BY id
+          )
+          WHERE start_time >= today() - {days: UInt32} + 1
+          GROUP BY day
+          ORDER BY day ASC
+        `,
+        query_params: { projectId: input.projectId, days: input.days },
+        format: "JSONEachRow",
+      });
+
+      const rows = (await result.json()) as Array<Record<string, unknown>>;
+      return rows.map((r) => ({
+        date:  String(r["day"]),
+        count: Number(r["trace_count"]),
+      }));
+    }),
+
   // All spans for a single trace, ordered by start_time.
-  // Used by the sidesheet to render the span hierarchy.
   spans: procedure
     .input(z.object({ projectId: z.string().uuid(), traceId: z.string() }))
     .query(async ({ input }) => {
@@ -176,7 +221,6 @@ export const tracesRouter = router({
         model:         String(r["model"] ?? ""),
         inputTokens:   Number(r["input_tokens"] ?? 0),
         outputTokens:  Number(r["output_tokens"] ?? 0),
-        // Micro-dollars → dollars
         inputCostUsd:  Number(r["input_cost_usd"] ?? 0) / 1_000_000,
         outputCostUsd: Number(r["output_cost_usd"] ?? 0) / 1_000_000,
         input:         String(r["input"] ?? ""),

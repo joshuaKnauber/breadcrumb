@@ -15,6 +15,13 @@
       "when": 1771429967769,
       "tag": "0001_superb_ben_grimm",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1771575637050,
+      "tag": "0002_round_ronan",
+      "breakpoints": true
     }
   ]
 }
