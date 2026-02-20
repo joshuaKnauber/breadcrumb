@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Plus,
   Trash,
@@ -84,6 +84,10 @@ function GeneralSection({ projectId }: { projectId: string }) {
 
   const current = project.data?.find((p) => p.id === projectId);
   const [name, setName] = useState(current?.name ?? "");
+
+  useEffect(() => {
+    if (current?.name !== undefined) setName(current.name);
+  }, [current?.name]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
