@@ -66,7 +66,7 @@ function OverviewPage() {
   const totalCost   = stats.data?.totalCostUsd ?? 0;
 
   return (
-    <main className="px-8 py-7 space-y-6">
+    <main className="px-4 py-5 sm:px-8 sm:py-7 space-y-6">
 
       {/* ── Filter bar ────────────────────────────────────────── */}
       <div className="flex items-center gap-3 flex-wrap">
@@ -117,7 +117,7 @@ function OverviewPage() {
       </div>
 
       {/* ── Stat cards ────────────────────────────────────────── */}
-      <div className="flex gap-4">
+      <div className="grid grid-cols-2 sm:flex gap-4">
         <StatCard
           icon={<Pulse size={16} className="text-zinc-400" />}
           label="Traces"
@@ -148,7 +148,7 @@ function OverviewPage() {
       <div className="flex flex-col gap-4">
 
       {/* Row 1: Traces + Errors */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <ChartCard
           label="Traces"
           data={buildChartData(daily.data ?? [], from, to, "traces")}
@@ -168,7 +168,7 @@ function OverviewPage() {
       </div>
 
       {/* Row 2: Cost + Model usage */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <ChartCard
           label="Cost"
           data={buildChartData(daily.data ?? [], from, to, "cost")}
