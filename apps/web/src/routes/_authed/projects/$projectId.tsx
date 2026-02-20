@@ -24,7 +24,7 @@ function ProjectLayout() {
 
   return (
     <div>
-      <header className="border-b border-zinc-800 px-8">
+      <header className="border-b border-zinc-800 px-4 sm:px-8">
         {/* Nav row */}
         <div className="flex items-center justify-between h-[53px]">
           <div className="flex items-center gap-2 text-sm">

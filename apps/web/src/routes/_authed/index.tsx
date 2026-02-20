@@ -15,7 +15,7 @@ function IndexPage() {
   return (
     <>
     <AppHeader />
-    <main className="px-8 py-7 space-y-6">
+    <main className="px-4 py-5 sm:px-8 sm:py-7 space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Projects</h2>
         <Link

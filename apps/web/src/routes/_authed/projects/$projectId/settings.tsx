@@ -35,7 +35,7 @@ function SettingsPage() {
   const [section, setSection] = useState<Section>("general");
 
   return (
-    <main className="p-6 space-y-6">
+    <main className="px-4 py-5 sm:px-6 space-y-6">
       <div className="flex gap-8">
         <nav className="w-44 shrink-0 space-y-0.5">
           {NAV.map((item) => (

@@ -7,7 +7,7 @@ import { UserMenu } from "./UserMenu";
  */
 export function AppHeader() {
   return (
-    <header className="border-b border-zinc-800 px-8">
+    <header className="border-b border-zinc-800 px-4 sm:px-8">
       <div className="flex items-center justify-between h-[53px]">
         <Link to="/" className="text-sm font-semibold text-zinc-100 hover:text-zinc-50 transition-colors">
           Breadcrumb

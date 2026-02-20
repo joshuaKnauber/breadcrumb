@@ -18,7 +18,7 @@ function TracesPage() {
 
   return (
     <>
-    <main className="p-6 space-y-6">
+    <main className="px-4 py-5 sm:px-6 space-y-6">
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatCard
