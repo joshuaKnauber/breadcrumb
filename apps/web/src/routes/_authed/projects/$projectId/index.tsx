@@ -2,6 +2,7 @@ import { ResponsiveLine } from "@nivo/line";
 import { CurrencyDollar, Pulse } from "@phosphor-icons/react";
 import { createFileRoute } from "@tanstack/react-router";
 import { trpc } from "../../../../lib/trpc";
+import { useTheme } from "../../../../hooks/useTheme";
 
 export const Route = createFileRoute("/_authed/projects/$projectId/")({
   component: OverviewPage,
@@ -11,15 +12,17 @@ const DAYS = 30;
 
 function OverviewPage() {
   const { projectId } = Route.useParams();
+  const { theme } = useTheme();
   const stats = trpc.traces.stats.useQuery({ projectId });
   const daily = trpc.traces.dailyCount.useQuery({ projectId, days: DAYS });
 
   const chartData = buildChartData(daily.data ?? [], DAYS);
+  const nivoTheme = buildNivoTheme(theme);
 
   return (
-    <main className="p-6 space-y-6">
+    <main className="px-8 py-7 space-y-6">
       {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="flex gap-4">
         <StatCard
           icon={<Pulse size={16} className="text-zinc-400" />}
           label="Total traces"
@@ -35,11 +38,11 @@ function OverviewPage() {
       </div>
 
       {/* Traces per day chart */}
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
-        <p className="text-sm font-medium text-zinc-300 mb-5">
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-6">
+        <p className="text-sm font-medium text-zinc-400 mb-5">
           Traces per day (last 30 days)
         </p>
-        <div style={{ height: 180 }}>
+        <div style={{ height: 196 }}>
           {daily.isLoading ? (
             <div className="h-full flex items-center justify-center">
               <span className="text-xs text-zinc-600 animate-pulse">
@@ -70,7 +73,7 @@ function OverviewPage() {
               pointSize={0}
               enableArea
               areaOpacity={0.08}
-              colors={["#a1a1aa"]}
+              colors={["#9e9990"]}
               theme={nivoTheme}
               isInteractive
               enableCrosshair={false}
@@ -107,16 +110,19 @@ function buildChartData(rows: { date: string; count: number }[], days: number) {
   return data;
 }
 
-const nivoTheme = {
-  background: "transparent",
-  text: { fill: "#71717a", fontSize: 11 },
-  axis: {
-    ticks: { text: { fill: "#71717a" } },
-    legend: { text: { fill: "#71717a" } },
-  },
-  grid: { line: { stroke: "#27272a", strokeWidth: 1 } },
-  crosshair: { line: { stroke: "#52525b" } },
-};
+function buildNivoTheme(theme: "dark" | "light") {
+  const isDark = theme === "dark";
+  return {
+    background: "transparent",
+    text: { fill: isDark ? "#7a7570" : "#7a7570", fontSize: 11 },
+    axis: {
+      ticks: { text: { fill: isDark ? "#7a7570" : "#7a7570" } },
+      legend: { text: { fill: isDark ? "#7a7570" : "#7a7570" } },
+    },
+    grid: { line: { stroke: isDark ? "#242018" : "#e3e0db", strokeWidth: 1 } },
+    crosshair: { line: { stroke: isDark ? "#35302a" : "#c8c4be" } },
+  };
+}
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -132,13 +138,13 @@ function StatCard({
   loading?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-4 space-y-2">
-      <div className="flex items-center gap-2">
+    <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-5 py-4 space-y-3 min-w-[160px]">
+      <div className="flex items-center gap-1.5">
         {icon}
         <p className="text-xs text-zinc-500">{label}</p>
       </div>
       <p
-        className={`text-2xl font-semibold tracking-tight ${
+        className={`text-2xl font-semibold tracking-tight tabular-nums ${
           loading ? "text-zinc-700 animate-pulse" : "text-zinc-100"
         }`}
       >

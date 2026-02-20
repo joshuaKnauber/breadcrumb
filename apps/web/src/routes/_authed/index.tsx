@@ -15,28 +15,28 @@ function IndexPage() {
   return (
     <>
     <AppHeader />
-    <main className="p-6 space-y-6">
+    <main className="px-8 py-7 space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Projects</h2>
         <Link
           to="/new"
-          className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
+          className="flex items-center gap-1.5 rounded-md px-3.5 py-2 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
         >
-          <Plus size={16} />
+          <Plus size={15} />
           New project
         </Link>
       </div>
 
       {projects.data?.length ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {projects.data.map((project) => (
             <Link
               key={project.id}
               to="/projects/$projectId"
               params={{ projectId: project.id }}
-              className="rounded-lg border border-zinc-800 bg-zinc-900 p-4 space-y-3 hover:border-zinc-700 transition-colors"
+              className="rounded-lg border border-zinc-800 bg-zinc-900 px-5 py-5 space-y-3 hover:border-zinc-600 transition-colors"
             >
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-3">
                 <Folder size={18} className="text-zinc-500" />
                 <span className="text-sm font-medium">{project.name}</span>
               </div>
@@ -47,8 +47,8 @@ function IndexPage() {
           ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-700 py-16 text-center">
-          <Folder size={32} className="text-zinc-600 mb-3" />
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-700 py-20 text-center">
+          <Folder size={28} className="text-zinc-600 mb-3" />
           <p className="text-sm text-zinc-400">No projects yet</p>
           <Link
             to="/new"

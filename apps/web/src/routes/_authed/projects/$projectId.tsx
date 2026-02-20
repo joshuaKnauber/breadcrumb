@@ -1,13 +1,11 @@
-import { SignOut } from "@phosphor-icons/react";
 import {
   createFileRoute,
   Link,
   Outlet,
-  useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { useAuth } from "../../../hooks/useAuth";
 import { trpc } from "../../../lib/trpc";
+import { UserMenu } from "../../../components/UserMenu";
 
 export const Route = createFileRoute("/_authed/projects/$projectId")({
   component: ProjectLayout,
@@ -23,34 +21,26 @@ function ProjectLayout() {
   const { projectId } = Route.useParams();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const project = trpc.projects.get.useQuery({ id: projectId });
-  const auth = useAuth();
-  const navigate = useNavigate();
 
   return (
     <div>
-      <header className="border-b border-zinc-800 px-6">
-        {/* Nav row: app link + breadcrumb on left, logout on right */}
+      <header className="border-b border-zinc-800 px-8">
+        {/* Nav row */}
         <div className="flex items-center justify-between h-[53px]">
           <div className="flex items-center gap-2 text-sm">
             <Link
               to="/"
-              className="font-semibold text-zinc-100 hover:text-white transition-colors"
+              className="font-semibold text-zinc-100 hover:text-zinc-50 transition-colors"
             >
               Breadcrumb
             </Link>
             <span className="text-zinc-700 select-none">/</span>
-            <span className="font-medium text-zinc-300">
+            <span className="font-medium text-zinc-400">
               {project.data?.name ?? "…"}
             </span>
           </div>
 
-          <button
-            onClick={() => auth.logout().then(() => navigate({ to: "/login" }))}
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
-          >
-            <SignOut size={16} />
-            Logout
-          </button>
+          <UserMenu />
         </div>
 
         {/* Tab row */}

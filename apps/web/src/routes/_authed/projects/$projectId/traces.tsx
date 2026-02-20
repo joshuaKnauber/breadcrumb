@@ -17,6 +17,7 @@ function TracesPage() {
   const [selected, setSelected] = useState<SelectedTrace | null>(null);
 
   return (
+    <>
     <main className="p-6 space-y-6">
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -93,13 +94,14 @@ function TracesPage() {
         </div>
       )}
 
-      <TraceSheet
-        projectId={projectId}
-        traceId={selected?.id ?? null}
-        traceName={selected?.name}
-        onClose={() => setSelected(null)}
-      />
     </main>
+    <TraceSheet
+      projectId={projectId}
+      traceId={selected?.id ?? null}
+      traceName={selected?.name}
+      onClose={() => setSelected(null)}
+    />
+    </>
   );
 }
 

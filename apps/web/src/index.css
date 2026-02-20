@@ -1,16 +1,61 @@
 @import "tailwindcss";
 
+@theme {
+  /* ── Fonts ────────────────────────────────────────────── */
+  --font-sans: "Geist", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+
+  /* ── Border radius — squarer corners ─────────────────── */
+  --radius-sm:  1px;
+  --radius:     2px;
+  --radius-md:  3px;
+  --radius-lg:  4px;
+  --radius-xl:  6px;
+  --radius-2xl: 8px;
+  --radius-3xl: 10px;
+
+  /* ── Zinc — warm neutral, slight stone/sand undertone ── */
+  --color-zinc-50:  #faf9f7;
+  --color-zinc-100: #edeae5;
+  --color-zinc-200: #dedad4;
+  --color-zinc-300: #c4bfb8;
+  --color-zinc-400: #9e9990;
+  --color-zinc-500: #7a7570;
+  --color-zinc-600: #524b43;
+  --color-zinc-700: #35302a;
+  --color-zinc-800: #242018;
+  --color-zinc-900: #141210;
+  --color-zinc-950: #0c0b0a;
+}
+
+/* ── Light mode: remap zinc to inverted light-appropriate values ── */
+/* Every bg-zinc-*, border-zinc-*, text-zinc-* class adapts for free. */
+:root.light {
+  --color-zinc-950: #fafaf8;
+  --color-zinc-900: #f2f1ee;
+  --color-zinc-800: #e3e0db;
+  --color-zinc-700: #c8c4be;
+  --color-zinc-600: #9e9990;
+  --color-zinc-500: #7a7570;
+  --color-zinc-400: #52504a;
+  --color-zinc-300: #35302a;
+  --color-zinc-200: #282320;
+  --color-zinc-100: #1e1b18;
+  --color-zinc-50:  #1a1714;
+}
+
 *,
 *::before,
 *::after {
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
-    Arial, sans-serif;
+  min-height: 100%;
+  background-color: var(--color-zinc-950);
+  font-family: "Geist", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
