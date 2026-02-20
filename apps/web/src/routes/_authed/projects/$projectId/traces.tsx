@@ -1,8 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Pulse, CheckCircle, XCircle } from "@phosphor-icons/react";
 import { trpc } from "../../../../lib/trpc";
-import { TraceSheet } from "../../../../components/TraceSheet";
 import { DateRangePopover, today, presetFrom } from "../../../../components/DateRangePopover";
 import { MultiselectCombobox } from "../../../../components/MultiselectCombobox";
 
@@ -10,10 +9,9 @@ export const Route = createFileRoute("/_authed/projects/$projectId/traces")({
   component: TracesPage,
 });
 
-type SelectedTrace = { id: string; name: string };
-
 function TracesPage() {
   const { projectId } = Route.useParams();
+  const navigate = useNavigate();
 
   // Date range
   const [from, setFrom]     = useState(() => presetFrom(30));
@@ -25,8 +23,6 @@ function TracesPage() {
   const [selectedModels,   setSelectedModels]   = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [envFilter,        setEnvFilter]        = useState("");
-
-  const [selected, setSelected] = useState<SelectedTrace | null>(null);
 
   const applyPreset    = (days: 7 | 30 | 90) => { setFrom(presetFrom(days)); setTo(today()); setPreset(days); };
   const handleFromChange = (v: string) => { setFrom(v); setPreset(null); };
@@ -49,7 +45,6 @@ function TracesPage() {
                      selectedStatuses.length > 0 || !!envFilter;
 
   return (
-    <>
     <main className="px-4 py-5 sm:px-6 space-y-4">
 
       {/* ── Filter bar ────────────────────────────────────────── */}
@@ -132,7 +127,7 @@ function TracesPage() {
                 <tr
                   key={trace.id}
                   className="hover:bg-zinc-900/50 transition-colors cursor-pointer"
-                  onClick={() => setSelected({ id: trace.id, name: trace.name })}
+                  onClick={() => navigate({ to: "/projects/$projectId/trace/$traceId", params: { projectId, traceId: trace.id } })}
                 >
                   <td className="px-4 py-3">
                     <span className="font-medium text-zinc-100">{trace.name}</span>
@@ -166,13 +161,6 @@ function TracesPage() {
       )}
 
     </main>
-    <TraceSheet
-      projectId={projectId}
-      traceId={selected?.id ?? null}
-      traceName={selected?.name}
-      onClose={() => setSelected(null)}
-    />
-    </>
   );
 }
 

@@ -4,8 +4,8 @@ import {
   Outlet,
   useRouterState,
 } from "@tanstack/react-router";
-import { trpc } from "../../../lib/trpc";
 import { UserMenu } from "../../../components/UserMenu";
+import { trpc } from "../../../lib/trpc";
 
 export const Route = createFileRoute("/_authed/projects/$projectId")({
   component: ProjectLayout,
@@ -32,7 +32,7 @@ function ProjectLayout() {
               to="/"
               className="flex items-center hover:opacity-80 transition-opacity"
             >
-              <img src="/logo.svg" alt="Breadcrumb" className="h-4" />
+              <img src="/logo.svg" alt="Breadcrumb" className="h-5" />
             </Link>
             <span className="text-zinc-700 select-none">/</span>
             <span className="font-medium text-zinc-400">
@@ -49,7 +49,9 @@ function ProjectLayout() {
             const href = `/projects/${projectId}${path}`;
             const isActive = exact
               ? pathname === href
-              : pathname.startsWith(href);
+              : pathname.startsWith(href) ||
+                (label === "Traces" &&
+                  pathname.startsWith(`/projects/${projectId}/trace/`));
 
             return (
               <Link
