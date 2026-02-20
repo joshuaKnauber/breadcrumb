@@ -21,7 +21,8 @@
     "react": "^19",
     "react-dom": "^19",
     "superjson": "^2",
-    "tailwindcss": "^4.1.18"
+    "tailwindcss": "^4.1.18",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@tanstack/router-plugin": "^1.161.1",

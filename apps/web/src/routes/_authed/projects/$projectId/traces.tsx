@@ -1,32 +1,44 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute } from "@tanstack/react-router";
 import { Pulse, CheckCircle, XCircle } from "@phosphor-icons/react";
+import { z } from "zod";
 import { trpc } from "../../../../lib/trpc";
 import { DateRangePopover, today, presetFrom } from "../../../../components/DateRangePopover";
 import { MultiselectCombobox } from "../../../../components/MultiselectCombobox";
 
+const searchSchema = z.object({
+  from:     z.string().optional(),
+  to:       z.string().optional(),
+  preset:   z.union([z.literal(7), z.literal(30), z.literal(90)]).optional(),
+  names:    z.array(z.string()).optional(),
+  models:   z.array(z.string()).optional(),
+  statuses: z.array(z.enum(["ok", "error"])).optional(),
+  env:      z.string().optional(),
+});
+
 export const Route = createFileRoute("/_authed/projects/$projectId/traces")({
+  validateSearch: searchSchema,
   component: TracesPage,
 });
 
 function TracesPage() {
   const { projectId } = Route.useParams();
-  const navigate = useNavigate();
+  const navigate = Route.useNavigate();
+  const search = Route.useSearch();
 
-  // Date range
-  const [from, setFrom]     = useState(() => presetFrom(30));
-  const [to, setTo]         = useState(today);
-  const [preset, setPreset] = useState<7 | 30 | 90 | null>(30);
+  const from             = search.from     ?? presetFrom(30);
+  const to               = search.to       ?? today();
+  const preset           = search.preset   ?? 30;
+  const selectedNames    = search.names    ?? [];
+  const selectedModels   = search.models   ?? [];
+  const selectedStatuses = search.statuses ?? [];
+  const envFilter        = search.env      ?? "";
 
-  // Filters
-  const [selectedNames,    setSelectedNames]    = useState<string[]>([]);
-  const [selectedModels,   setSelectedModels]   = useState<string[]>([]);
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
-  const [envFilter,        setEnvFilter]        = useState("");
-
-  const applyPreset    = (days: 7 | 30 | 90) => { setFrom(presetFrom(days)); setTo(today()); setPreset(days); };
-  const handleFromChange = (v: string) => { setFrom(v); setPreset(null); };
-  const handleToChange   = (v: string) => { setTo(v);   setPreset(null); };
+  const applyPreset      = (days: 7 | 30 | 90) =>
+    navigate({ search: (prev) => ({ ...prev, from: presetFrom(days), to: today(), preset: days }) });
+  const handleFromChange = (v: string) =>
+    navigate({ search: (prev) => ({ ...prev, from: v, preset: undefined }) });
+  const handleToChange   = (v: string) =>
+    navigate({ search: (prev) => ({ ...prev, to: v, preset: undefined }) });
 
   const traces   = trpc.traces.list.useQuery({
     projectId,
@@ -55,7 +67,7 @@ function TracesPage() {
           to={to}
           preset={preset}
           onPreset={applyPreset}
-          onCustom={() => setPreset(null)}
+          onCustom={() => navigate({ search: (prev) => ({ ...prev, preset: undefined }) })}
           onFromChange={handleFromChange}
           onToChange={handleToChange}
         />
@@ -65,28 +77,28 @@ function TracesPage() {
         <MultiselectCombobox
           options={nameList.data ?? []}
           selected={selectedNames}
-          onChange={setSelectedNames}
+          onChange={(v) => navigate({ search: (prev) => ({ ...prev, names: v.length ? v : undefined }) })}
           placeholder="All traces"
         />
 
         <MultiselectCombobox
           options={modelList.data ?? []}
           selected={selectedModels}
-          onChange={setSelectedModels}
+          onChange={(v) => navigate({ search: (prev) => ({ ...prev, models: v.length ? v : undefined }) })}
           placeholder="All models"
         />
 
         <MultiselectCombobox
           options={["ok", "error"]}
           selected={selectedStatuses}
-          onChange={setSelectedStatuses}
+          onChange={(v) => navigate({ search: (prev) => ({ ...prev, statuses: v.length ? v as ("ok" | "error")[] : undefined }) })}
           placeholder="All statuses"
         />
 
         {(envList.data?.length ?? 0) > 0 && (
           <select
             value={envFilter}
-            onChange={(e) => setEnvFilter(e.target.value)}
+            onChange={(e) => navigate({ search: (prev) => ({ ...prev, env: e.target.value || undefined }) })}
             className="h-[30px] rounded-md border border-zinc-800 bg-zinc-900 px-2.5 text-xs text-zinc-400 outline-none focus:border-zinc-600 cursor-pointer"
           >
             <option value="">All environments</option>

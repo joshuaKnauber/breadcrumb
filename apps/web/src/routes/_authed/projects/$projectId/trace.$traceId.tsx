@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, CaretRight, CaretDown, CheckCircle, XCircle } from "@phosphor-icons/react";
 import { trpc } from "../../../../lib/trpc";
 
@@ -329,6 +329,7 @@ function TimelineView({ tree }: { tree: SpanNode[] }) {
 
 function TraceDetailPage() {
   const { projectId, traceId } = Route.useParams();
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("tree");
   const [selectedSpan, setSelectedSpan] = useState<SpanData | null>(null);
 
@@ -348,14 +349,13 @@ function TraceDetailPage() {
 
       {/* ── Subheader ── */}
       <div className="px-4 sm:px-8 py-3 border-b border-zinc-800 flex items-center gap-4 shrink-0">
-        <Link
-          to="/projects/$projectId/traces"
-          params={{ projectId }}
+        <button
+          onClick={() => router.history.back()}
           className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors shrink-0"
         >
           <ArrowLeft size={13} />
           Traces
-        </Link>
+        </button>
 
         <div className="h-3 w-px bg-zinc-800 shrink-0" />
 
