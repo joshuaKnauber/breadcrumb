@@ -3,6 +3,8 @@ import { useState } from "react";
 import { Pulse, CheckCircle, XCircle } from "@phosphor-icons/react";
 import { trpc } from "../../../../lib/trpc";
 import { TraceSheet } from "../../../../components/TraceSheet";
+import { DateRangePopover, today, presetFrom } from "../../../../components/DateRangePopover";
+import { MultiselectCombobox } from "../../../../components/MultiselectCombobox";
 
 export const Route = createFileRoute("/_authed/projects/$projectId/traces")({
   component: TracesPage,
@@ -12,34 +14,103 @@ type SelectedTrace = { id: string; name: string };
 
 function TracesPage() {
   const { projectId } = Route.useParams();
-  const stats  = trpc.traces.stats.useQuery({ projectId });
-  const traces = trpc.traces.list.useQuery({ projectId });
+
+  // Date range
+  const [from, setFrom]     = useState(() => presetFrom(30));
+  const [to, setTo]         = useState(today);
+  const [preset, setPreset] = useState<7 | 30 | 90 | null>(30);
+
+  // Filters
+  const [selectedNames,    setSelectedNames]    = useState<string[]>([]);
+  const [selectedModels,   setSelectedModels]   = useState<string[]>([]);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [envFilter,        setEnvFilter]        = useState("");
+
   const [selected, setSelected] = useState<SelectedTrace | null>(null);
+
+  const applyPreset    = (days: 7 | 30 | 90) => { setFrom(presetFrom(days)); setTo(today()); setPreset(days); };
+  const handleFromChange = (v: string) => { setFrom(v); setPreset(null); };
+  const handleToChange   = (v: string) => { setTo(v);   setPreset(null); };
+
+  const traces   = trpc.traces.list.useQuery({
+    projectId,
+    from,
+    to,
+    names:       selectedNames.length    > 0 ? selectedNames    : undefined,
+    models:      selectedModels.length   > 0 ? selectedModels   : undefined,
+    statuses:    selectedStatuses.length > 0 ? selectedStatuses as ("ok" | "error")[] : undefined,
+    environment: envFilter || undefined,
+  });
+  const envList    = trpc.traces.environments.useQuery({ projectId });
+  const modelList  = trpc.traces.models.useQuery({ projectId });
+  const nameList   = trpc.traces.names.useQuery({ projectId });
+
+  const hasFilters = selectedNames.length > 0 || selectedModels.length > 0 ||
+                     selectedStatuses.length > 0 || !!envFilter;
 
   return (
     <>
-    <main className="px-4 py-5 sm:px-6 space-y-6">
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard
-          label="Total traces"
-          value={stats.data ? String(stats.data.traceCount) : "—"}
-          loading={stats.isLoading}
+    <main className="px-4 py-5 sm:px-6 space-y-4">
+
+      {/* ── Filter bar ────────────────────────────────────────── */}
+      <div className="flex items-center gap-3 flex-wrap">
+
+        <DateRangePopover
+          from={from}
+          to={to}
+          preset={preset}
+          onPreset={applyPreset}
+          onCustom={() => setPreset(null)}
+          onFromChange={handleFromChange}
+          onToChange={handleToChange}
         />
-        <StatCard
-          label="Total cost"
-          value={stats.data ? formatCost(stats.data.totalCostUsd) : "—"}
-          loading={stats.isLoading}
+
+        <div className="h-4 w-px bg-zinc-800" />
+
+        <MultiselectCombobox
+          options={nameList.data ?? []}
+          selected={selectedNames}
+          onChange={setSelectedNames}
+          placeholder="All traces"
         />
+
+        <MultiselectCombobox
+          options={modelList.data ?? []}
+          selected={selectedModels}
+          onChange={setSelectedModels}
+          placeholder="All models"
+        />
+
+        <MultiselectCombobox
+          options={["ok", "error"]}
+          selected={selectedStatuses}
+          onChange={setSelectedStatuses}
+          placeholder="All statuses"
+        />
+
+        {(envList.data?.length ?? 0) > 0 && (
+          <select
+            value={envFilter}
+            onChange={(e) => setEnvFilter(e.target.value)}
+            className="h-[30px] rounded-md border border-zinc-800 bg-zinc-900 px-2.5 text-xs text-zinc-400 outline-none focus:border-zinc-600 cursor-pointer"
+          >
+            <option value="">All environments</option>
+            {envList.data!.map((e) => (
+              <option key={e} value={e}>{e}</option>
+            ))}
+          </select>
+        )}
       </div>
 
-      {/* Trace table */}
+      {/* ── Trace table ───────────────────────────────────────── */}
       {traces.isLoading ? null : !traces.data?.length ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-700 py-16 text-center">
           <Pulse size={32} className="text-zinc-600 mb-3" />
-          <p className="text-sm text-zinc-400">No traces yet</p>
+          <p className="text-sm text-zinc-400">No traces found</p>
           <p className="mt-1 text-xs text-zinc-500">
-            Send your first trace using the SDK to see it here.
+            {hasFilters
+              ? "Try adjusting your filters."
+              : "Send your first trace using the SDK to see it here."}
           </p>
         </div>
       ) : (
@@ -106,17 +177,6 @@ function TracesPage() {
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
-
-function StatCard({ label, value, loading }: { label: string; value: string; loading?: boolean }) {
-  return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-4 space-y-1">
-      <p className="text-xs text-zinc-500">{label}</p>
-      <p className={`text-2xl font-semibold tracking-tight ${loading ? "text-zinc-700 animate-pulse" : "text-zinc-100"}`}>
-        {loading ? "———" : value}
-      </p>
-    </div>
-  );
-}
 
 function StatusBadge({ status }: { status: "ok" | "error" }) {
   if (status === "error") {

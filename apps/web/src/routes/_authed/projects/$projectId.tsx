@@ -30,9 +30,9 @@ function ProjectLayout() {
           <div className="flex items-center gap-2 text-sm">
             <Link
               to="/"
-              className="font-semibold text-zinc-100 hover:text-zinc-50 transition-colors"
+              className="flex items-center hover:opacity-80 transition-opacity"
             >
-              Breadcrumb
+              <img src="/logo.svg" alt="Breadcrumb" className="h-4" />
             </Link>
             <span className="text-zinc-700 select-none">/</span>
             <span className="font-medium text-zinc-400">

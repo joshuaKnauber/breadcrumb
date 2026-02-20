@@ -135,12 +135,37 @@ export const tracesRouter = router({
   list: procedure
     .input(
       z.object({
-        projectId: z.string().uuid(),
-        limit:  z.number().int().min(1).max(100).default(50),
-        offset: z.number().int().min(0).default(0),
+        projectId:   z.string().uuid(),
+        limit:       z.number().int().min(1).max(100).default(50),
+        offset:      z.number().int().min(0).default(0),
+        from:        z.string().optional(),
+        to:          z.string().optional(),
+        names:       z.array(z.string()).optional(),
+        models:      z.array(z.string()).optional(),
+        statuses:    z.array(z.enum(["ok", "error"])).optional(),
+        environment: z.string().optional(),
       })
     )
     .query(async ({ input }) => {
+      const clauses: string[] = [];
+      const params: Record<string, unknown> = {
+        projectId: input.projectId,
+        limit:     input.limit,
+        offset:    input.offset,
+      };
+
+      if (input.from)                              { clauses.push(`t.start_time >= {from: Date}`);                       params.from        = input.from; }
+      if (input.to)                                { clauses.push(`t.start_time < {to: Date} + INTERVAL 1 DAY`);        params.to          = input.to; }
+      if (input.names?.length)                     { clauses.push(`t.name IN {names: Array(String)}`);                  params.names       = input.names; }
+      if (input.statuses?.length)                  { clauses.push(`t.status IN {statuses: Array(String)}`);             params.statuses    = input.statuses; }
+      if (input.environment)                       { clauses.push(`t.environment = {environment: String}`);             params.environment = input.environment; }
+      if (input.models?.length)                    { clauses.push(`t.id IN (
+        SELECT DISTINCT trace_id FROM breadcrumb.spans
+        WHERE project_id = {projectId: UUID} AND model IN {models: Array(String)}
+      )`);                                           params.models = input.models; }
+
+      const whereStr = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+
       const result = await clickhouse.query({
         query: `
           SELECT
@@ -173,14 +198,11 @@ export const tracesRouter = router({
           LEFT JOIN (
             ${ROLLUPS_SUBQUERY("projectId")}
           ) r ON t.id = r.trace_id
+          ${whereStr}
           ORDER BY t.start_time DESC
           LIMIT {limit: UInt32} OFFSET {offset: UInt32}
         `,
-        query_params: {
-          projectId: input.projectId,
-          limit: input.limit,
-          offset: input.offset,
-        },
+        query_params: params,
         format: "JSONEachRow",
       });
 

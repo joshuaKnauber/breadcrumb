@@ -9,8 +9,8 @@ export function AppHeader() {
   return (
     <header className="border-b border-zinc-800 px-4 sm:px-8">
       <div className="flex items-center justify-between h-[53px]">
-        <Link to="/" className="text-sm font-semibold text-zinc-100 hover:text-zinc-50 transition-colors">
-          Breadcrumb
+        <Link to="/" className="flex items-center hover:opacity-80 transition-opacity">
+          <img src="/logo.svg" alt="Breadcrumb" className="h-4" />
         </Link>
         <UserMenu />
       </div>
