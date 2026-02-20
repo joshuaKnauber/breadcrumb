@@ -86,14 +86,12 @@ function OverviewPage() {
         <div className="h-4 w-px bg-zinc-800" />
 
         {/* Trace name multiselect */}
-        {(nameList.data?.length ?? 0) > 0 && (
-          <MultiselectCombobox
-            options={nameList.data!}
-            selected={selectedNames}
-            onChange={setSelectedNames}
-            placeholder="All traces"
-          />
-        )}
+        <MultiselectCombobox
+          options={nameList.data ?? []}
+          selected={selectedNames}
+          onChange={setSelectedNames}
+          placeholder="All traces"
+        />
 
         {/* Environment */}
         {(envList.data?.length ?? 0) > 0 && (
@@ -110,14 +108,12 @@ function OverviewPage() {
         )}
 
         {/* Model */}
-        {(modelList.data?.length ?? 0) > 0 && (
-          <MultiselectCombobox
-            options={modelList.data!}
-            selected={selectedModels}
-            onChange={setSelectedModels}
-            placeholder="All models"
-          />
-        )}
+        <MultiselectCombobox
+          options={modelList.data ?? []}
+          selected={selectedModels}
+          onChange={setSelectedModels}
+          placeholder="All models"
+        />
       </div>
 
       {/* ── Stat cards ────────────────────────────────────────── */}
