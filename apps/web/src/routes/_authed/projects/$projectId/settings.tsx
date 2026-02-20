@@ -300,7 +300,7 @@ function ApiKeysSection({ projectId }: { projectId: string }) {
 
 // ── MCP ──────────────────────────────────────────────────────────────
 
-const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3100";
+const API_URL = typeof window !== "undefined" ? window.location.origin : "http://localhost:3100";
 
 function McpSection({ projectId }: { projectId: string }) {
   const [open, setOpen] = useState(false);
