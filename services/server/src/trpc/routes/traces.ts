@@ -3,8 +3,6 @@ import { router, procedure } from "../trpc.js";
 import { clickhouse } from "../../db/clickhouse.js";
 
 // Reusable rollups subquery fragment.
-// max(max_end_time) gives the latest span end time for each trace,
-// used as a fallback when trace.end_time is NULL.
 const ROLLUPS_SUBQUERY = (projectIdParam: string) => `
   SELECT
     trace_id,
@@ -19,25 +17,87 @@ const ROLLUPS_SUBQUERY = (projectIdParam: string) => `
   GROUP BY trace_id
 `;
 
+// Build the WHERE clauses and params for the shared filter set.
+// All filters are optional — omitting them returns all-time / unfiltered data.
+function buildTraceFilters(input: {
+  projectId: string;
+  from?: string;
+  to?: string;
+  environment?: string;
+  models?: string[];
+  names?: string[];
+}) {
+  const clauses: string[] = [];
+  const params: Record<string, unknown> = { projectId: input.projectId };
+
+  if (input.from) {
+    clauses.push(`t.start_time >= {from: Date}`);
+    params.from = input.from;
+  }
+  if (input.to) {
+    clauses.push(`t.start_time < {to: Date} + INTERVAL 1 DAY`);
+    params.to = input.to;
+  }
+  if (input.environment) {
+    clauses.push(`t.environment = {environment: String}`);
+    params.environment = input.environment;
+  }
+  if (input.names && input.names.length > 0) {
+    clauses.push(`t.name IN {names: Array(String)}`);
+    params.names = input.names;
+  }
+  if (input.models && input.models.length > 0) {
+    clauses.push(
+      `t.id IN (
+        SELECT DISTINCT trace_id
+        FROM breadcrumb.spans
+        WHERE project_id = {projectId: UUID}
+          AND model IN {models: Array(String)}
+      )`
+    );
+    params.models = input.models;
+  }
+
+  return {
+    whereStr: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "",
+    params,
+  };
+}
+
+// Shared filter input schema (all optional for backward compat)
+const filterInput = {
+  from:        z.string().optional(),  // YYYY-MM-DD
+  to:          z.string().optional(),  // YYYY-MM-DD
+  environment: z.string().optional(),
+  models:      z.array(z.string()).optional(),
+  names:       z.array(z.string()).optional(),
+};
+
 export const tracesRouter = router({
   // Aggregated stats for the project dashboard header cards.
   stats: procedure
-    .input(z.object({ projectId: z.string().uuid() }))
+    .input(z.object({ projectId: z.string().uuid(), ...filterInput }))
     .query(async ({ input }) => {
+      const { whereStr, params } = buildTraceFilters(input);
+
       const result = await clickhouse.query({
         query: `
           SELECT
-            count()                AS trace_count,
-            sum(r.total_cost_usd)  AS total_cost_usd,
+            count()                             AS trace_count,
+            countIf(t.status = 'error')         AS error_count,
+            sum(coalesce(r.total_cost_usd, 0))  AS total_cost_usd,
             avgIf(
               toInt64(toUnixTimestamp64Milli(COALESCE(t.end_time, r.max_end_time))) - toInt64(toUnixTimestamp64Milli(t.start_time)),
               isNotNull(COALESCE(t.end_time, r.max_end_time)) AND COALESCE(t.end_time, r.max_end_time) > t.start_time
-            )                      AS avg_duration_ms
+            ) AS avg_duration_ms
           FROM (
             SELECT
               id,
-              argMax(start_time, version) AS start_time,
-              argMax(end_time, version)   AS end_time
+              argMax(name, version)         AS name,
+              argMax(start_time, version)   AS start_time,
+              argMax(end_time, version)     AS end_time,
+              argMax(status, version)       AS status,
+              argMax(environment, version)  AS environment
             FROM breadcrumb.traces
             WHERE project_id = {projectId: UUID}
             GROUP BY id
@@ -51,17 +111,23 @@ export const tracesRouter = router({
             WHERE project_id = {projectId: UUID}
             GROUP BY trace_id
           ) r ON t.id = r.trace_id
+          ${whereStr}
         `,
-        query_params: { projectId: input.projectId },
+        query_params: params,
         format: "JSONEachRow",
       });
 
       const rows = (await result.json()) as Array<Record<string, unknown>>;
       const row = rows[0] ?? {};
+      const traceCount = Number(row["trace_count"] ?? 0);
+      const errorCount = Number(row["error_count"] ?? 0);
 
       return {
-        traceCount: Number(row["trace_count"] ?? 0),
-        totalCostUsd: Number(row["total_cost_usd"] ?? 0) / 1_000_000,
+        traceCount,
+        totalCostUsd:  Number(row["total_cost_usd"] ?? 0) / 1_000_000,
+        avgDurationMs: Number(row["avg_duration_ms"] ?? 0),
+        errorCount,
+        errorRate: traceCount > 0 ? errorCount / traceCount : 0,
       };
     }),
 
@@ -70,7 +136,7 @@ export const tracesRouter = router({
     .input(
       z.object({
         projectId: z.string().uuid(),
-        limit: z.number().int().min(1).max(100).default(50),
+        limit:  z.number().int().min(1).max(100).default(50),
         offset: z.number().int().min(0).default(0),
       })
     )
@@ -136,7 +202,174 @@ export const tracesRouter = router({
       }));
     }),
 
-  // Traces grouped by day, for the sparkline on the Overview page.
+  // Per-day metrics (traces, cost, errors) for the overview chart.
+  dailyMetrics: procedure
+    .input(z.object({ projectId: z.string().uuid(), ...filterInput }))
+    .query(async ({ input }) => {
+      const { whereStr, params } = buildTraceFilters(input);
+
+      const result = await clickhouse.query({
+        query: `
+          SELECT
+            toDate(t.start_time)                AS day,
+            count()                             AS trace_count,
+            countIf(t.status = 'error')         AS error_count,
+            sum(coalesce(r.total_cost_usd, 0))  AS total_cost_usd
+          FROM (
+            SELECT
+              id,
+              argMax(name, version)         AS name,
+              argMax(start_time, version)   AS start_time,
+              argMax(status, version)       AS status,
+              argMax(environment, version)  AS environment
+            FROM breadcrumb.traces
+            WHERE project_id = {projectId: UUID}
+            GROUP BY id
+          ) t
+          LEFT JOIN (
+            SELECT
+              trace_id,
+              sum(input_cost_usd + output_cost_usd) AS total_cost_usd
+            FROM breadcrumb.trace_rollups
+            WHERE project_id = {projectId: UUID}
+            GROUP BY trace_id
+          ) r ON t.id = r.trace_id
+          ${whereStr}
+          GROUP BY day
+          ORDER BY day ASC
+        `,
+        query_params: params,
+        format: "JSONEachRow",
+      });
+
+      const rows = (await result.json()) as Array<Record<string, unknown>>;
+      return rows.map((r) => ({
+        date:    String(r["day"]),
+        traces:  Number(r["trace_count"]),
+        errors:  Number(r["error_count"]),
+        costUsd: Number(r["total_cost_usd"]) / 1_000_000,
+      }));
+    }),
+
+  // Span aggregation grouped by provider + model for the model breakdown table.
+  modelBreakdown: procedure
+    .input(
+      z.object({
+        projectId: z.string().uuid(),
+        from:   z.string().optional(),
+        to:     z.string().optional(),
+        models: z.array(z.string()).optional(),
+      })
+    )
+    .query(async ({ input }) => {
+      const clauses: string[] = [`project_id = {projectId: UUID}`, `provider != ''`];
+      const params: Record<string, unknown> = { projectId: input.projectId };
+
+      if (input.from) { clauses.push(`start_time >= {from: Date}`); params.from = input.from; }
+      if (input.to)   { clauses.push(`start_time < {to: Date} + INTERVAL 1 DAY`); params.to = input.to; }
+      if (input.models && input.models.length > 0) { clauses.push(`model IN {models: Array(String)}`); params.models = input.models; }
+
+      const result = await clickhouse.query({
+        query: `
+          SELECT
+            provider,
+            model,
+            count(DISTINCT trace_id)              AS trace_count,
+            sum(input_tokens)                     AS input_tokens,
+            sum(output_tokens)                    AS output_tokens,
+            sum(input_cost_usd + output_cost_usd) AS cost_usd
+          FROM breadcrumb.spans
+          WHERE ${clauses.join(" AND ")}
+          GROUP BY provider, model
+          ORDER BY cost_usd DESC
+          LIMIT 20
+        `,
+        query_params: params,
+        format: "JSONEachRow",
+      });
+
+      const rows = (await result.json()) as Array<Record<string, unknown>>;
+      return rows.map((r) => ({
+        provider:     String(r["provider"]),
+        model:        String(r["model"]),
+        traceCount:   Number(r["trace_count"]),
+        inputTokens:  Number(r["input_tokens"]),
+        outputTokens: Number(r["output_tokens"]),
+        costUsd:      Number(r["cost_usd"]) / 1_000_000,
+      }));
+    }),
+
+  // Distinct environment values for the filter dropdown.
+  environments: procedure
+    .input(z.object({ projectId: z.string().uuid() }))
+    .query(async ({ input }) => {
+      const result = await clickhouse.query({
+        query: `
+          SELECT DISTINCT env
+          FROM (
+            SELECT argMax(environment, version) AS env
+            FROM breadcrumb.traces
+            WHERE project_id = {projectId: UUID}
+            GROUP BY id
+          )
+          WHERE env != ''
+          ORDER BY env ASC
+        `,
+        query_params: { projectId: input.projectId },
+        format: "JSONEachRow",
+      });
+
+      const rows = (await result.json()) as Array<Record<string, unknown>>;
+      return rows.map((r) => String(r["env"]));
+    }),
+
+  // Distinct model values for the filter dropdown.
+  models: procedure
+    .input(z.object({ projectId: z.string().uuid() }))
+    .query(async ({ input }) => {
+      const result = await clickhouse.query({
+        query: `
+          SELECT DISTINCT model
+          FROM breadcrumb.spans
+          WHERE project_id = {projectId: UUID}
+            AND model != ''
+          ORDER BY model ASC
+          LIMIT 100
+        `,
+        query_params: { projectId: input.projectId },
+        format: "JSONEachRow",
+      });
+
+      const rows = (await result.json()) as Array<Record<string, unknown>>;
+      return rows.map((r) => String(r["model"]));
+    }),
+
+  // Distinct trace name values for the multiselect combobox.
+  names: procedure
+    .input(z.object({ projectId: z.string().uuid() }))
+    .query(async ({ input }) => {
+      const result = await clickhouse.query({
+        query: `
+          SELECT DISTINCT name
+          FROM (
+            SELECT argMax(name, version) AS name
+            FROM breadcrumb.traces
+            WHERE project_id = {projectId: UUID}
+            GROUP BY id
+          )
+          WHERE name != ''
+          ORDER BY name ASC
+          LIMIT 500
+        `,
+        query_params: { projectId: input.projectId },
+        format: "JSONEachRow",
+      });
+
+      const rows = (await result.json()) as Array<Record<string, unknown>>;
+      return rows.map((r) => String(r["name"]));
+    }),
+
+  // Traces grouped by day — kept for backward compatibility.
   dailyCount: procedure
     .input(
       z.object({
@@ -151,9 +384,7 @@ export const tracesRouter = router({
             toDate(start_time) AS day,
             count()            AS trace_count
           FROM (
-            SELECT
-              id,
-              argMax(start_time, version) AS start_time
+            SELECT id, argMax(start_time, version) AS start_time
             FROM breadcrumb.traces
             WHERE project_id = {projectId: UUID}
             GROUP BY id
@@ -167,10 +398,7 @@ export const tracesRouter = router({
       });
 
       const rows = (await result.json()) as Array<Record<string, unknown>>;
-      return rows.map((r) => ({
-        date:  String(r["day"]),
-        count: Number(r["trace_count"]),
-      }));
+      return rows.map((r) => ({ date: String(r["day"]), count: Number(r["trace_count"]) }));
     }),
 
   // All spans for a single trace, ordered by start_time.
@@ -180,26 +408,13 @@ export const tracesRouter = router({
       const result = await clickhouse.query({
         query: `
           SELECT
-            id,
-            parent_span_id,
-            name,
-            type,
-            status,
-            status_message,
-            start_time,
-            end_time,
-            provider,
-            model,
-            input_tokens,
-            output_tokens,
-            input_cost_usd,
-            output_cost_usd,
-            input,
-            output,
-            metadata
+            id, parent_span_id, name, type, status, status_message,
+            start_time, end_time, provider, model,
+            input_tokens, output_tokens, input_cost_usd, output_cost_usd,
+            input, output, metadata
           FROM breadcrumb.spans
           WHERE project_id = {projectId: UUID}
-            AND trace_id  = {traceId: String}
+            AND trace_id = {traceId: String}
           ORDER BY start_time ASC
         `,
         query_params: { projectId: input.projectId, traceId: input.traceId },
