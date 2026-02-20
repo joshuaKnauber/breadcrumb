@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { X, CaretRight, CaretDown } from "@phosphor-icons/react";
-import { trpc } from "../../../../lib/trpc";
+import { trpc } from "../lib/trpc";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 

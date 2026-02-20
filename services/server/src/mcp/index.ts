@@ -2,24 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { clickhouse } from "../db/clickhouse.js";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-// Return wall-clock duration in ms, or null if end time is missing/invalid.
-function calcDuration(startTime: string, endTime: string | null): number | null {
-  if (!endTime) return null;
-  const d = new Date(endTime).getTime() - new Date(startTime).getTime();
-  return d > 0 ? d : null;
-}
-
-// Metadata comes back as a parsed JS object from the ClickHouse JSON client.
-// String() would give "[object Object]", so keep it as-is.
-function normMetadata(v: unknown): unknown {
-  if (v === null || v === undefined || v === "") return null;
-  if (typeof v === "string") {
-    try { return JSON.parse(v); } catch { return v || null; }
-  }
-  return v; // already an object
-}
+import { calcDuration, normMetadata } from "./helpers.js";
 
 // COALESCE(trace.end_time, rollup.max_end_time):
 // trace.end_time is Nullable — NULL when trace.end() was never called.

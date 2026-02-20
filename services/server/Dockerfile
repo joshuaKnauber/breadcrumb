@@ -37,5 +37,8 @@ COPY --from=build /app/apps/web/dist ./public
 # Copy ClickHouse migrations — read at runtime by the migration runner
 COPY --from=build /app/infra/clickhouse/migrations ./migrations/clickhouse
 
+# Copy Drizzle (Postgres) migrations — read at runtime by drizzle-orm migrator
+COPY --from=build /app/services/server/drizzle ./drizzle
+
 EXPOSE 3100
 CMD ["node", "dist/index.js"]

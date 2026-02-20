@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { Pulse, CheckCircle, XCircle } from "@phosphor-icons/react";
 import { trpc } from "../../../../lib/trpc";
-import { TraceSheet } from "./TraceSheet";
+import { TraceSheet } from "../../../../components/TraceSheet";
 
 export const Route = createFileRoute("/_authed/projects/$projectId/traces")({
   component: TracesPage,
