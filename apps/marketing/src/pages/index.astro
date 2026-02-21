@@ -41,7 +41,7 @@ import Layout from '../layouts/Layout.astro';
           </form>
         </div>
 
-        <!-- ── Animated live trace feed ────────────────── -->
+        <!-- ── Abstract trace timeline ───────────────────── -->
         <div class="border border-border rounded-xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.07),0_4px_16px_rgba(0,0,0,0.04)]">
 
           <!-- Browser chrome -->
@@ -56,77 +56,59 @@ import Layout from '../layouts/Layout.astro';
             </span>
           </div>
 
-          <!-- App shell -->
-          <div class="grid grid-cols-[176px_1fr] min-h-[420px]">
+          <!-- App content -->
+          <div class="bg-white">
 
-            <!-- Sidebar -->
-            <aside class="border-r border-[#ebebeb] py-5 flex flex-col bg-[#faf9f7]">
-              <div class="flex items-center gap-[7px] px-4 pb-5 border-b border-[#ebebeb] mb-2 font-display text-[12px] font-semibold text-fg">
-                <svg width="13" height="13" viewBox="0 0 278 277" fill="none">
-                  <path d="M198.033 0.727C240.224 -5.344 278 27.386 278 70.011c0 17.711-6.668 34.277-18 46.857v86.356c-.167-.001-.333-.003-.5-.003-40.041 0-72.5 32.459-72.5 72.5 0 .167.002.334.003.5H53c-18.778 0-34-15.222-34-34V117.955C7.062 105.25 0 88.237 0 70.011 0 27.386 37.776-5.344 79.967.727l47.639 6.854c7.557 1.088 15.231 1.088 22.788 0l47.639-6.854z" fill="currentColor"/>
-                </svg>
-                my-project
-              </div>
-              <nav class="flex flex-col gap-px px-2 flex-1 pt-1">
-                {[
-                  { label: 'Traces',  active: true  },
-                  { label: 'Spans',   active: false },
-                  { label: 'Latency', active: false },
-                  { label: 'Costs',   active: false },
-                ].map(({ label, active }) => (
-                  <span class:list={[
-                    'flex items-center px-2.5 py-[7px] text-[12px] rounded-md cursor-default font-display',
-                    active
-                      ? 'bg-white text-fg font-medium border border-[#e8e8e8] shadow-sm'
-                      : 'text-[#bbb]',
-                  ]}>
-                    {label}
-                  </span>
-                ))}
-              </nav>
-              <div class="px-2 pt-2 border-t border-[#ebebeb]">
-                <span class="flex items-center px-2.5 py-[7px] text-[12px] text-[#bbb] rounded-md cursor-default font-display">
-                  Settings
+            <!-- Header bar -->
+            <div class="flex items-center justify-between px-6 py-[11px] border-b border-[#f5f5f5]">
+              <div class="flex items-center gap-[7px]">
+                <span class="relative flex h-[7px] w-[7px]">
+                  <span class="live-ping absolute inset-0 rounded-full" style="background:#22c08b;opacity:0.4"></span>
+                  <span class="relative rounded-full h-[7px] w-[7px]" style="background:#22c08b"></span>
                 </span>
+                <span class="font-display text-[13px] font-semibold text-fg">Traces</span>
               </div>
-            </aside>
-
-            <!-- Live feed -->
-            <div class="flex flex-col bg-white">
-
-              <!-- Feed header -->
-              <div class="flex items-center justify-between px-5 py-[11px] border-b border-[#ebebeb]">
-                <div class="flex items-center gap-[7px]">
-                  <span class="relative flex h-[7px] w-[7px]">
-                    <span class="live-ping absolute inset-0 rounded-full" style="background:#22c08b;opacity:0.45"></span>
-                    <span class="relative rounded-full h-[7px] w-[7px]" style="background:#22c08b"></span>
-                  </span>
-                  <span class="font-display text-[13px] font-semibold text-fg">Live feed</span>
-                </div>
+              <div class="flex items-center gap-3">
+                <span class="font-mono text-[10px]" style="color:#ccc">my-project</span>
                 <div class="flex gap-[5px]">
-                  <span class="font-mono text-[10px] px-[7px] py-[2px] rounded-[4px]" style="color:#c97020;background:#fff8f0;border:1px solid #ffe0c0">LLM</span>
-                  <span class="font-mono text-[10px] px-[7px] py-[2px] rounded-[4px]" style="color:#15876a;background:#edfaf5;border:1px solid #b7f0db">Tool</span>
-                  <span class="font-mono text-[10px] px-[7px] py-[2px] rounded-[4px]" style="color:#5849d4;background:#f3f0ff;border:1px solid #ddd8fc">Span</span>
-                  <span class="font-mono text-[10px] px-[7px] py-[2px] rounded-[4px]" style="color:#b03d90;background:#fdf0f7;border:1px solid #f5c0e5">Embed</span>
+                  <span class="block w-[7px] h-[7px] rounded-full" style="background:#fbbf24"></span>
+                  <span class="block w-[7px] h-[7px] rounded-full" style="background:#34d399"></span>
+                  <span class="block w-[7px] h-[7px] rounded-full" style="background:#a78bfa"></span>
+                  <span class="block w-[7px] h-[7px] rounded-full" style="background:#f472b6"></span>
                 </div>
               </div>
-
-              <!-- Scrolling events -->
-              <div class="relative flex-1" style="min-height:354px;overflow:hidden">
-                <!-- Top fade mask -->
-                <div class="absolute top-0 left-0 right-0 h-16 pointer-events-none z-10"
-                     style="background:linear-gradient(to bottom,white 10%,transparent 100%)"></div>
-                <!-- Events stack -->
-                <div id="trace-inner"
-                     class="absolute inset-0 flex flex-col justify-end gap-[4px] px-4 py-4 overflow-hidden">
-                  <!-- populated by JS -->
-                </div>
-              </div>
-
             </div>
+
+            <!-- Timeline body -->
+            <div class="px-6 pt-5 pb-7">
+
+              <!-- Time axis -->
+              <div class="flex justify-between mb-[10px]">
+                {['0', '250ms', '500ms', '750ms', '1s+'].map(t => (
+                  <span class="font-mono text-[9px]" style="color:#ddd">{t}</span>
+                ))}
+              </div>
+
+              <!-- Grid + rows -->
+              <div class="relative">
+
+                <!-- Vertical grid lines -->
+                <div class="absolute inset-0 flex pointer-events-none" aria-hidden="true">
+                  <div class="w-1/4 border-r border-[#efefef] h-full"></div>
+                  <div class="w-1/4 border-r border-[#efefef] h-full"></div>
+                  <div class="w-1/4 border-r border-[#efefef] h-full"></div>
+                  <div class="w-1/4 h-full"></div>
+                </div>
+
+                <!-- Rows (populated by JS) -->
+                <div id="tl-rows" class="flex flex-col gap-[13px] relative"></div>
+
+              </div>
+            </div>
+
           </div>
         </div>
-        <!-- end animated feed -->
+        <!-- end timeline -->
 
       </div>
     </section>
@@ -207,33 +189,11 @@ import Layout from '../layouts/Layout.astro';
   </footer>
 
 <style>
-  /* Live indicator pulse */
   .live-ping {
     animation: livePing 2s cubic-bezier(0, 0, 0.2, 1) infinite;
   }
   @keyframes livePing {
     75%, 100% { transform: scale(2.8); opacity: 0; }
-  }
-
-  /* Row slide-in */
-  .row-enter {
-    animation: rowIn 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-  @keyframes rowIn {
-    from { opacity: 0; transform: translateY(7px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-
-  /* Streaming cursor on LLM spans */
-  .streaming-cursor::after {
-    content: '▋';
-    animation: cursorBlink 0.75s step-end infinite;
-    margin-left: 2px;
-    font-size: 9px;
-    opacity: 0.55;
-  }
-  @keyframes cursorBlink {
-    50% { opacity: 0; }
   }
 </style>
 
@@ -246,165 +206,110 @@ import Layout from '../layouts/Layout.astro';
     if (email) window.location.href = `/early-access?email=${encodeURIComponent(email)}`;
   });
 
-  // ── Animated trace feed ───────────────────────────────────────
+  // ── Abstract timeline animation ───────────────────────────────
 
-  const TYPES = {
-    llm:   { label: 'LLM',   color: '#f59332', bg: '#fff8f0', text: '#c97020', border: '#ffe0c0' },
-    tool:  { label: 'Tool',  color: '#22c08b', bg: '#edfaf5', text: '#15876a', border: '#b7f0db' },
-    chain: { label: 'Span',  color: '#7c6ef5', bg: '#f3f0ff', text: '#5849d4', border: '#ddd8fc' },
-    embed: { label: 'Embed', color: '#e05fb5', bg: '#fdf0f7', text: '#b03d90', border: '#f5c0e5' },
-  } as const;
+  type BlockColor = 'amber' | 'teal' | 'violet' | 'pink';
+  // [color, startPct, widthPct, growDuration_ms]
+  type Block = [BlockColor, number, number, number];
 
-  type SpanType = keyof typeof TYPES;
+  const COLORS: Record<BlockColor, string> = {
+    amber:  '#fbbf24',
+    teal:   '#34d399',
+    violet: '#a78bfa',
+    pink:   '#f472b6',
+  };
 
-  interface Span {
-    type: SpanType;
-    name: string;
-    ms: number;
-    detail?: string;
-    tokens?: string;
-  }
-  interface Trace {
-    id: string;
-    spans: Span[];
-    error?: boolean;
-  }
-
-  const TRACES: Trace[] = [
-    {
-      id: 'tr_4f2a8c3d',
-      spans: [
-        { type: 'chain', name: 'chat_pipeline',           ms: 1240 },
-        { type: 'tool',  name: 'retrieve_context',        ms: 48,   detail: '3 docs' },
-        { type: 'llm',   name: 'gpt-4o',                 ms: 891,  tokens: '1,247' },
-      ],
-    },
-    {
-      id: 'tr_8b1e9f7c',
-      spans: [
-        { type: 'chain', name: 'agent_loop',              ms: 2341 },
-        { type: 'llm',   name: 'claude-3.5-sonnet',      ms: 334,  tokens: '312' },
-        { type: 'tool',  name: 'web_search',              ms: 89,   detail: '"Q3 revenue"' },
-        { type: 'tool',  name: 'format_response',         ms: 4,    detail: 'md → text' },
-        { type: 'llm',   name: 'claude-3.5-sonnet',      ms: 445,  tokens: '567' },
-      ],
-    },
-    {
-      id: 'tr_2c6d4a1b',
-      spans: [
-        { type: 'llm',   name: 'gpt-4o-mini',            ms: 128,  tokens: '234' },
-      ],
-    },
-    {
-      id: 'tr_9e3f7b5a',
-      spans: [
-        { type: 'chain', name: 'embedding_pipeline',      ms: 87 },
-        { type: 'embed', name: 'text-embedding-3-small',  ms: 67,   tokens: '3,891' },
-      ],
-    },
-    {
-      id: 'tr_1d8c2e4f',
-      spans: [
-        { type: 'chain', name: 'chat_pipeline',           ms: 1590 },
-        { type: 'tool',  name: 'check_cache',             ms: 3,    detail: 'miss' },
-        { type: 'llm',   name: 'gpt-4o',                 ms: 1240, tokens: '2,134' },
-      ],
-    },
-    {
-      id: 'tr_7e5c3b1a',
-      spans: [
-        { type: 'chain', name: 'summarize_thread',        ms: 980 },
-        { type: 'tool',  name: 'fetch_messages',          ms: 22,   detail: '14 messages' },
-        { type: 'llm',   name: 'gpt-4o',                 ms: 712,  tokens: '892' },
-      ],
-    },
+  // Each sequence represents one trace's spans laid out on a 0–100% timeline
+  // (baseline ~1000ms). Spans grow left-to-right in order.
+  const SEQS: Block[][] = [
+    // context retrieval → llm generation
+    [['teal',   0, 13, 240], ['amber', 16, 81, 840]],
+    // agent: plan → search → format → respond
+    [['amber',  0, 19, 340], ['teal', 22,  7, 110], ['teal', 31, 5, 80], ['amber', 38, 59, 720]],
+    // single fast llm call
+    [['amber',  2, 94, 400]],
+    // embedding pipeline
+    [['violet', 0, 45, 440], ['pink', 49, 48, 500]],
+    // cache miss + long generation
+    [['teal',   0,  4,  60], ['amber',  7, 90, 980]],
+    // fetch + summarize
+    [['teal',   0,  9, 150], ['amber', 12, 85, 860]],
+    // planning chain with two tool calls
+    [['violet', 0, 14, 260], ['teal', 17,  6, 100], ['teal', 25, 6, 100], ['amber', 33, 64, 760]],
   ];
 
-  const feed = document.getElementById('trace-inner')!;
-  const MAX_ROWS = 11;
+  const rowsEl = document.getElementById('tl-rows')!;
+  const ROW_COUNT = 5;
 
-  function prune() {
-    while (feed.children.length > MAX_ROWS) {
-      feed.removeChild(feed.firstChild!);
-    }
+  // Build row DOM elements
+  const rowContainers: HTMLElement[] = [];
+  for (let i = 0; i < ROW_COUNT; i++) {
+    const row = document.createElement('div');
+    row.style.cssText = 'position:relative;height:28px;';
+
+    // Pill-shaped track background
+    const track = document.createElement('div');
+    track.style.cssText = 'position:absolute;inset:0;background:#f7f7f7;border-radius:5px;';
+    row.appendChild(track);
+
+    rowsEl.appendChild(row);
+    rowContainers.push(row);
   }
 
-  function makeSpanRow(span: Span, streaming = false): HTMLElement {
-    const t = TYPES[span.type];
-    const el = document.createElement('div');
-    el.className = 'row-enter flex items-center gap-[7px] px-[10px] py-[7px] rounded-[7px] shrink-0';
-    el.style.cssText = `background:${t.bg};border-left:2.5px solid ${t.color};`;
-
-    const badge   = `<span class="shrink-0 font-mono text-[10px] font-semibold px-[5px] py-[2px] rounded-[3px]" style="color:${t.text};background:white;border:1px solid ${t.border}">${t.label}</span>`;
-    const name    = `<span class="font-display text-[12px] font-medium flex-1 min-w-0 truncate${streaming ? ' streaming-cursor' : ''}" style="color:#1a1a1a">${span.name}</span>`;
-    const detail  = span.detail ? `<span class="font-mono text-[11px] shrink-0 max-w-[88px] truncate" style="color:#aaa">${span.detail}</span>` : '';
-    const ms      = !streaming ? `<span class="font-mono text-[10px] shrink-0" style="color:#ccc">${span.ms}ms</span>` : '';
-    const tokens  = span.tokens && !streaming ? `<span class="font-mono text-[10px] font-semibold shrink-0" style="color:${t.text}">${span.tokens}</span>` : '';
-
-    el.innerHTML = badge + name + detail + ms + tokens;
-    return el;
-  }
-
-  function makeTraceSep(trace: Trace): HTMLElement {
-    const el = document.createElement('div');
-    el.className = 'row-enter flex items-center gap-[7px] px-[2px] shrink-0 my-[2px]';
-    el.innerHTML = `
-      <span class="font-mono text-[10px]" style="color:#d0d0d0">${trace.id}</span>
-      <div class="flex-1 h-px" style="background:#ebebeb"></div>
-      <span class="w-[6px] h-[6px] rounded-full shrink-0" style="background:${trace.error ? '#ef4444' : '#22c08b'}"></span>
-    `;
-    return el;
-  }
-
+  // Double-rAF: ensures the browser has committed styles before we trigger transition
+  const raf2 = () => new Promise<void>(r => requestAnimationFrame(() => requestAnimationFrame(() => r())));
   const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
-  async function runDemo() {
-    let idx = 0;
+  async function animateRow(row: HTMLElement, startIdx: number) {
+    let idx = startIdx;
+
     while (true) {
-      const trace = TRACES[idx++ % TRACES.length];
-      await sleep(700);
+      const seq = SEQS[idx % SEQS.length];
+      idx++;
 
-      for (let i = 0; i < trace.spans.length; i++) {
-        const span = trace.spans[i];
-        const isLastLLM = span.type === 'llm' && i === trace.spans.length - 1;
+      const blockEls: HTMLElement[] = [];
 
-        await sleep(420);
-        prune();
+      // Animate blocks in sequence — each grows fully before the next starts
+      for (const [color, startPct, widthPct, growMs] of seq) {
+        const block = document.createElement('div');
+        block.style.cssText = `
+          position: absolute;
+          top: 3px; bottom: 3px;
+          left: ${startPct}%;
+          width: ${widthPct}%;
+          background: ${COLORS[color]};
+          border-radius: 4px;
+          transform: scaleX(0);
+          transform-origin: left center;
+          will-change: transform;
+        `;
+        row.appendChild(block);
+        blockEls.push(block);
 
-        if (isLastLLM) {
-          // Show streaming state for the final LLM span
-          const streamRow = makeSpanRow(span, true);
-          feed.appendChild(streamRow);
-          await sleep(Math.min(span.ms, 900));
-
-          // Complete: remove cursor, add stats inline
-          streamRow.querySelector('.streaming-cursor')?.classList.remove('streaming-cursor');
-          const t = TYPES[span.type];
-
-          const msEl = document.createElement('span');
-          msEl.className = 'font-mono text-[10px] shrink-0';
-          msEl.style.color = '#ccc';
-          msEl.textContent = `${span.ms}ms`;
-          streamRow.appendChild(msEl);
-
-          if (span.tokens) {
-            const tokEl = document.createElement('span');
-            tokEl.className = 'font-mono text-[10px] font-semibold shrink-0';
-            tokEl.style.color = t.text;
-            tokEl.textContent = span.tokens;
-            streamRow.appendChild(tokEl);
-          }
-        } else {
-          feed.appendChild(makeSpanRow(span));
-        }
+        await raf2();
+        block.style.transition = `transform ${growMs}ms cubic-bezier(0.2, 0, 0.05, 1)`;
+        block.style.transform = 'scaleX(1)';
+        await sleep(growMs + 20);
       }
 
-      await sleep(500);
-      prune();
-      feed.appendChild(makeTraceSep(trace));
+      // Hold the completed trace
+      await sleep(1600);
+
+      // Fade all blocks out together
+      blockEls.forEach(b => {
+        b.style.transition = 'opacity 0.32s ease';
+        b.style.opacity = '0';
+      });
+      await sleep(380);
+
+      blockEls.forEach(b => b.remove());
+      await sleep(200);
     }
   }
 
-  runDemo();
+  // Stagger row starts so they're always at different phases
+  rowContainers.forEach((row, i) => {
+    setTimeout(() => animateRow(row, i), i * 1350);
+  });
 </script>
 </Layout>
