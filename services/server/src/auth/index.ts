@@ -1,76 +1,10 @@
-import { Hono } from "hono";
-import { getCookie, setCookie } from "hono/cookie";
-import { SignJWT, jwtVerify } from "jose";
 import { eq } from "drizzle-orm";
-import { env } from "../env.js";
 import { db } from "../db/index.js";
 import { apiKeys, mcpKeys } from "../db/schema.js";
 import { hashApiKey } from "../lib/api-keys.js";
 import type { Context, Next } from "hono";
 
-const secret = new TextEncoder().encode(env.jwtSecret);
-
-async function signToken() {
-  return new SignJWT({})
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime("7d")
-    .sign(secret);
-}
-
-async function verifyToken(token: string): Promise<boolean> {
-  try {
-    await jwtVerify(token, secret);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// --- Routes ---
-
-export const authRoutes = new Hono();
-
-authRoutes.post("/login", async (c) => {
-  const { password } = await c.req.json<{ password: string }>();
-
-  if (password !== env.adminPassword) {
-    return c.json({ error: "Invalid password" }, 401);
-  }
-
-  const token = await signToken();
-  setCookie(c, "session", token, {
-    httpOnly: true,
-    sameSite: "Lax",
-    maxAge: 60 * 60 * 24 * 7,
-    path: "/",
-  });
-
-  return c.json({ success: true });
-});
-
-authRoutes.post("/logout", (c) => {
-  setCookie(c, "session", "", { maxAge: 0, path: "/" });
-  return c.json({ success: true });
-});
-
-authRoutes.get("/me", async (c) => {
-  const token = getCookie(c, "session");
-  if (!token || !(await verifyToken(token))) {
-    return c.json({ authenticated: false }, 401);
-  }
-  return c.json({ authenticated: true });
-});
-
-// --- Middleware ---
-
-export async function requireSession(c: Context, next: Next) {
-  const token = getCookie(c, "session");
-  if (!token || !(await verifyToken(token))) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-  await next();
-}
+// ── API key auth ─────────────────────────────────────────────────────
 
 const KEY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const keyCache = new Map<string, { projectId: string; expiresAt: number }>();
@@ -115,6 +49,8 @@ export async function requireApiKey(c: Context, next: Next) {
   c.set("projectId", projectId);
   await next();
 }
+
+// ── MCP key auth ─────────────────────────────────────────────────────
 
 const mcpKeyCache = new Map<string, { projectId: string; expiresAt: number }>();
 

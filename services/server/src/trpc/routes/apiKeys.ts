@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { router, procedure } from "../trpc.js";
+import { router, authedProcedure } from "../trpc.js";
 import { db } from "../../db/index.js";
 import { apiKeys } from "../../db/schema.js";
 import {
@@ -8,11 +8,17 @@ import {
   hashApiKey,
   getKeyPrefix,
 } from "../../lib/api-keys.js";
+import {
+  requireOrgMember,
+  requireOrgRole,
+  getApiKeyOrg,
+} from "../orgAccess.js";
 
 export const apiKeysRouter = router({
-  list: procedure
-    .input(z.object({ projectId: z.string().uuid() }))
-    .query(async ({ input }) => {
+  list: authedProcedure
+    .input(z.object({ projectId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      await requireOrgMember(ctx.user.id, ctx.user.role, input.projectId);
       return db
         .select({
           id: apiKeys.id,
@@ -25,14 +31,18 @@ export const apiKeysRouter = router({
         .orderBy(apiKeys.createdAt);
     }),
 
-  create: procedure
+  create: authedProcedure
     .input(
       z.object({
-        projectId: z.string().uuid(),
+        projectId: z.string(),
         name: z.string().min(1).max(255),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await requireOrgRole(ctx.user.id, ctx.user.role, input.projectId, [
+        "admin",
+        "owner",
+      ]);
       const rawKey = generateApiKey();
       const [key] = await db
         .insert(apiKeys)
@@ -49,13 +59,17 @@ export const apiKeysRouter = router({
           createdAt: apiKeys.createdAt,
         });
 
-      // Raw key only returned on creation — can't be retrieved later
       return { ...key, rawKey };
     }),
 
-  delete: procedure
-    .input(z.object({ id: z.string().uuid() }))
-    .mutation(async ({ input }) => {
+  delete: authedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const orgId = await getApiKeyOrg(input.id);
+      await requireOrgRole(ctx.user.id, ctx.user.role, orgId, [
+        "admin",
+        "owner",
+      ]);
       await db.delete(apiKeys).where(eq(apiKeys.id, input.id));
     }),
 });

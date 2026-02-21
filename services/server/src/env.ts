@@ -1,8 +1,10 @@
 import "dotenv/config";
 
 export const env = {
-  adminPassword: process.env.ADMIN_PASSWORD || "admin",
-  jwtSecret: process.env.JWT_SECRET || process.env.ADMIN_PASSWORD || "admin",
+  betterAuthSecret:
+    process.env.BETTER_AUTH_SECRET || "dev-secret-change-in-production",
+  betterAuthUrl: process.env.BETTER_AUTH_URL || "http://localhost:3100",
+  appBaseUrl: process.env.APP_BASE_URL || "http://localhost:3000",
   databaseUrl:
     process.env.DATABASE_URL ||
     "postgres://postgres:postgres@localhost:5432/breadcrumb",

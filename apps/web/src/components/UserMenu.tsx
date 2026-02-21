@@ -1,14 +1,13 @@
 import { useRef, useState, useEffect } from "react";
 import { Sun, Moon, SignOut, User } from "@phosphor-icons/react";
 import { useNavigate } from "@tanstack/react-router";
-import { useAuth } from "../hooks/useAuth";
+import { authClient } from "../lib/auth-client";
 import { useTheme } from "../hooks/useTheme";
 
 export function UserMenu() {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const { theme, toggle } = useTheme();
-  const auth = useAuth();
   const navigate = useNavigate();
 
   // Close on outside click
@@ -24,7 +23,7 @@ export function UserMenu() {
   }, [open]);
 
   const handleLogout = () => {
-    auth.logout().then(() => navigate({ to: "/login" }));
+    authClient.signOut().then(() => navigate({ to: "/login" }));
   };
 
   return (

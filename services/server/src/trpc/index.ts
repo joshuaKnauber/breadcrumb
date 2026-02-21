@@ -1,6 +1,7 @@
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import type { Context } from "hono";
 import { appRouter } from "./router.js";
+import type { TRPCContext } from "./trpc.js";
 
 export type { AppRouter } from "./router.js";
 
@@ -9,6 +10,9 @@ export const trpcHandler = async (c: Context) => {
     endpoint: "/trpc",
     req: c.req.raw,
     router: appRouter,
-    createContext: () => ({}),
+    createContext: (): TRPCContext => ({
+      user: c.get("user") ?? null,
+      session: c.get("session") ?? null,
+    }),
   });
 };

@@ -1,17 +1,17 @@
 import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
-import { useAuth } from "../hooks/useAuth";
+import { authClient } from "../lib/auth-client";
 
 export const Route = createFileRoute("/_authed")({
   component: AuthedLayout,
 });
 
 function AuthedLayout() {
-  const auth = useAuth();
+  const { data: session, isPending } = authClient.useSession();
   const navigate = useNavigate();
 
-  if (auth.isLoading) return null;
+  if (isPending) return null;
 
-  if (!auth.authenticated) {
+  if (!session) {
     navigate({ to: "/login" });
     return null;
   }

@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { UserMenu } from "./UserMenu";
+import { Logo } from "./common/logo/Logo";
 
 /**
  * Simple app-level header for non-project pages (projects list, new project).
@@ -13,7 +14,7 @@ export function AppHeader() {
           to="/"
           className="flex items-center hover:opacity-80 transition-opacity"
         >
-          <img src="/logo.svg" alt="Breadcrumb" className="h-5" />
+          <Logo className="size-4" />
         </Link>
         <UserMenu />
       </div>

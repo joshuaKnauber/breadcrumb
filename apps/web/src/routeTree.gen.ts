@@ -9,7 +9,9 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SignupRouteImport } from './routes/signup'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as AuthedIndexRouteImport } from './routes/_authed/index'
 import { Route as AuthedNewRouteImport } from './routes/_authed/new'
@@ -19,9 +21,19 @@ import { Route as AuthedProjectsProjectIdTracesRouteImport } from './routes/_aut
 import { Route as AuthedProjectsProjectIdSettingsRouteImport } from './routes/_authed/projects/$projectId/settings'
 import { Route as AuthedProjectsProjectIdTraceTraceIdRouteImport } from './routes/_authed/projects/$projectId/trace.$traceId'
 
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AcceptInviteRoute = AcceptInviteRouteImport.update({
+  id: '/accept-invite',
+  path: '/accept-invite',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthedRoute = AuthedRouteImport.update({
@@ -70,7 +82,9 @@ const AuthedProjectsProjectIdTraceTraceIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthedIndexRoute
+  '/accept-invite': typeof AcceptInviteRoute
   '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
   '/new': typeof AuthedNewRoute
   '/projects/$projectId': typeof AuthedProjectsProjectIdRouteWithChildren
   '/projects/$projectId/settings': typeof AuthedProjectsProjectIdSettingsRoute
@@ -79,7 +93,9 @@ export interface FileRoutesByFullPath {
   '/projects/$projectId/trace/$traceId': typeof AuthedProjectsProjectIdTraceTraceIdRoute
 }
 export interface FileRoutesByTo {
+  '/accept-invite': typeof AcceptInviteRoute
   '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
   '/new': typeof AuthedNewRoute
   '/': typeof AuthedIndexRoute
   '/projects/$projectId/settings': typeof AuthedProjectsProjectIdSettingsRoute
@@ -90,7 +106,9 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authed': typeof AuthedRouteWithChildren
+  '/accept-invite': typeof AcceptInviteRoute
   '/login': typeof LoginRoute
+  '/signup': typeof SignupRoute
   '/_authed/new': typeof AuthedNewRoute
   '/_authed/': typeof AuthedIndexRoute
   '/_authed/projects/$projectId': typeof AuthedProjectsProjectIdRouteWithChildren
@@ -103,7 +121,9 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/accept-invite'
     | '/login'
+    | '/signup'
     | '/new'
     | '/projects/$projectId'
     | '/projects/$projectId/settings'
@@ -112,7 +132,9 @@ export interface FileRouteTypes {
     | '/projects/$projectId/trace/$traceId'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/accept-invite'
     | '/login'
+    | '/signup'
     | '/new'
     | '/'
     | '/projects/$projectId/settings'
@@ -122,7 +144,9 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_authed'
+    | '/accept-invite'
     | '/login'
+    | '/signup'
     | '/_authed/new'
     | '/_authed/'
     | '/_authed/projects/$projectId'
@@ -134,16 +158,32 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   AuthedRoute: typeof AuthedRouteWithChildren
+  AcceptInviteRoute: typeof AcceptInviteRoute
   LoginRoute: typeof LoginRoute
+  SignupRoute: typeof SignupRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/accept-invite': {
+      id: '/accept-invite'
+      path: '/accept-invite'
+      fullPath: '/accept-invite'
+      preLoaderRoute: typeof AcceptInviteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authed': {
@@ -243,7 +283,9 @@ const AuthedRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   AuthedRoute: AuthedRouteWithChildren,
+  AcceptInviteRoute: AcceptInviteRoute,
   LoginRoute: LoginRoute,
+  SignupRoute: SignupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

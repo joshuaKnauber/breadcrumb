@@ -3,31 +3,26 @@ import { useState } from "react";
 import { authClient } from "../lib/auth-client";
 import { Logo } from "../components/common/logo/Logo";
 
-export const Route = createFileRoute("/login")({
-  component: LoginPage,
+export const Route = createFileRoute("/signup")({
+  component: SignupPage,
 });
 
-function LoginPage() {
+function SignupPage() {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { data: session } = authClient.useSession();
-
-  if (session) {
-    navigate({ to: "/" });
-    return null;
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      const result = await authClient.signIn.email({ email, password });
+      const result = await authClient.signUp.email({ email, password, name });
       if (result.error) {
-        setError(result.error.message ?? "Invalid credentials");
+        setError(result.error.message ?? "Failed to create account");
       } else {
         navigate({ to: "/" });
       }
@@ -100,14 +95,29 @@ function LoginPage() {
             <div className="px-8 py-8">
               <div className="mb-6">
                 <h1 className="text-base font-semibold text-zinc-100">
-                  Welcome back
+                  Create your account
                 </h1>
                 <p className="mt-0.5 text-sm text-zinc-500">
-                  Sign in to continue
+                  Get started with LLM tracing
                 </p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-zinc-400">
+                    Name
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Your name"
+                    required
+                    autoFocus
+                    className="auth-input w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600"
+                  />
+                </div>
+
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-zinc-400">
                     Email
@@ -118,7 +128,6 @@ function LoginPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
                     required
-                    autoFocus
                     className="auth-input w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600"
                   />
                 </div>
@@ -133,6 +142,7 @@ function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     required
+                    minLength={8}
                     className="auth-input w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600"
                   />
                 </div>
@@ -148,7 +158,7 @@ function LoginPage() {
                   disabled={loading}
                   className="mt-1 w-full rounded bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-200 disabled:opacity-40"
                 >
-                  {loading ? "Signing in…" : "Sign in"}
+                  {loading ? "Creating account…" : "Create account"}
                 </button>
               </form>
             </div>
@@ -156,12 +166,12 @@ function LoginPage() {
             {/* Footer */}
             <div className="border-t border-zinc-800 px-8 py-5">
               <p className="text-center text-xs text-zinc-500">
-                No account?{" "}
+                Already have an account?{" "}
                 <Link
-                  to="/signup"
+                  to="/login"
                   className="text-zinc-300 underline underline-offset-4 transition-colors hover:text-zinc-100"
                 >
-                  Create one
+                  Sign in
                 </Link>
               </p>
             </div>

@@ -4,6 +4,7 @@ import {
   Outlet,
   useRouterState,
 } from "@tanstack/react-router";
+import { Logo } from "../../../components/common/logo/Logo";
 import { UserMenu } from "../../../components/UserMenu";
 import { trpc } from "../../../lib/trpc";
 
@@ -32,7 +33,7 @@ function ProjectLayout() {
               to="/"
               className="flex items-center hover:opacity-80 transition-opacity"
             >
-              <img src="/logo.svg" alt="Breadcrumb" className="h-5" />
+              <Logo className="size-4" />
             </Link>
             <span className="text-zinc-700 select-none">/</span>
             <span className="font-medium text-zinc-400">

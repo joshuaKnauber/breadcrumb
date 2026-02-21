@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plus, Folder } from "@phosphor-icons/react";
 import { trpc } from "../../lib/trpc";
 import { AppHeader } from "../../components/AppHeader";
+import { useAuth } from "../../hooks/useAuth";
 
 export const Route = createFileRoute("/_authed/")({
   component: IndexPage,
@@ -9,6 +10,7 @@ export const Route = createFileRoute("/_authed/")({
 
 function IndexPage() {
   const projects = trpc.projects.list.useQuery();
+  const { isAdmin } = useAuth();
 
   if (projects.isLoading) return null;
 
@@ -18,13 +20,15 @@ function IndexPage() {
     <main className="px-4 py-5 sm:px-8 sm:py-7 space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Projects</h2>
-        <Link
-          to="/new"
-          className="flex items-center gap-1.5 rounded-md px-3.5 py-2 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
-        >
-          <Plus size={15} />
-          New project
-        </Link>
+        {isAdmin && (
+          <Link
+            to="/new"
+            className="flex items-center gap-1.5 rounded-md px-3.5 py-2 text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
+          >
+            <Plus size={15} />
+            New project
+          </Link>
+        )}
       </div>
 
       {projects.data?.length ? (
@@ -50,12 +54,14 @@ function IndexPage() {
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-zinc-700 py-20 text-center">
           <Folder size={28} className="text-zinc-600 mb-3" />
           <p className="text-sm text-zinc-400">No projects yet</p>
-          <Link
-            to="/new"
-            className="mt-3 text-sm text-zinc-300 underline underline-offset-4 hover:text-zinc-100 transition-colors"
-          >
-            Create your first project
-          </Link>
+          {isAdmin && (
+            <Link
+              to="/new"
+              className="mt-3 text-sm text-zinc-300 underline underline-offset-4 hover:text-zinc-100 transition-colors"
+            >
+              Create your first project
+            </Link>
+          )}
         </div>
       )}
     </main>

@@ -3,7 +3,8 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { readFile } from "node:fs/promises";
-import { authRoutes, requireSession, requireApiKey, requireMcpKey } from "./auth/index.js";
+import { auth } from "./auth/better-auth.js";
+import { requireApiKey, requireMcpKey } from "./auth/index.js";
 import { trpcHandler } from "./trpc/index.js";
 import { ingestRoutes } from "./ingest/index.js";
 import { runMigrations } from "./db/index.js";
@@ -14,16 +15,36 @@ import { buildMcpServer } from "./mcp/index.js";
 
 const app = new Hono();
 
-app.use("*", cors());
+const corsConfig = cors({
+  origin: env.appBaseUrl,
+  credentials: true,
+  allowHeaders: ["Content-Type", "Authorization"],
+  allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+});
+
+app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
+
+// CORS for the rest of the API
+app.use("/trpc/*", corsConfig);
+app.use("/v1/*", corsConfig);
+app.use("/mcp", corsConfig);
+app.use("/health", corsConfig);
 
 app.get("/health", (c) => c.json({ status: "ok" }));
 
-app.route("/auth", authRoutes);
+// Session middleware — populates user/session on the Hono context for tRPC.
+app.use("*", async (c, next) => {
+  const session = await auth.api.getSession({ headers: c.req.raw.headers });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (c as any).set("user", session?.user ?? null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (c as any).set("session", session?.session ?? null);
+  await next();
+});
 
 app.use("/v1/*", requireApiKey);
 app.route("/v1", ingestRoutes);
 
-app.use("/trpc/*", requireSession);
 app.use("/trpc/*", trpcHandler);
 
 app.all("/mcp", requireMcpKey, async (c) => {

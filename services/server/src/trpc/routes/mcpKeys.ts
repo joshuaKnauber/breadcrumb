@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { router, procedure } from "../trpc.js";
+import { router, authedProcedure } from "../trpc.js";
 import { db } from "../../db/index.js";
 import { mcpKeys } from "../../db/schema.js";
 import {
@@ -8,11 +8,13 @@ import {
   hashApiKey,
   getKeyPrefix,
 } from "../../lib/api-keys.js";
+import { requireOrgMember, getMcpKeyOrg } from "../orgAccess.js";
 
 export const mcpKeysRouter = router({
-  list: procedure
-    .input(z.object({ projectId: z.string().uuid() }))
-    .query(async ({ input }) => {
+  list: authedProcedure
+    .input(z.object({ projectId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      await requireOrgMember(ctx.user.id, ctx.user.role, input.projectId);
       return db
         .select({
           id: mcpKeys.id,
@@ -25,14 +27,15 @@ export const mcpKeysRouter = router({
         .orderBy(mcpKeys.createdAt);
     }),
 
-  create: procedure
+  create: authedProcedure
     .input(
       z.object({
-        projectId: z.string().uuid(),
+        projectId: z.string(),
         name: z.string().min(1).max(255),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await requireOrgMember(ctx.user.id, ctx.user.role, input.projectId);
       const rawKey = generateMcpKey();
       const [key] = await db
         .insert(mcpKeys)
@@ -49,13 +52,14 @@ export const mcpKeysRouter = router({
           createdAt: mcpKeys.createdAt,
         });
 
-      // Raw key only returned on creation — can't be retrieved later
       return { ...key, rawKey };
     }),
 
-  delete: procedure
-    .input(z.object({ id: z.string().uuid() }))
-    .mutation(async ({ input }) => {
+  delete: authedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const orgId = await getMcpKeyOrg(input.id);
+      await requireOrgMember(ctx.user.id, ctx.user.role, orgId);
       await db.delete(mcpKeys).where(eq(mcpKeys.id, input.id));
     }),
 });
