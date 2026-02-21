@@ -1,0 +1,281 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Get early access — Breadcrumb">
+  <main class="min-h-svh px-6 pt-16 pb-24 flex flex-col items-center">
+
+    <!-- Brand -->
+    <a href="/" class="inline-flex items-center gap-2 font-display text-sm font-semibold text-fg tracking-tight mb-14">
+      <svg width="18" height="18" viewBox="0 0 278 277" fill="none">
+        <path d="M198.033 0.727C240.224 -5.344 278 27.386 278 70.011c0 17.711-6.668 34.277-18 46.857v86.356c-.167-.001-.333-.003-.5-.003-40.041 0-72.5 32.459-72.5 72.5 0 .167.002.334.003.5H53c-18.778 0-34-15.222-34-34V117.955C7.062 105.25 0 88.237 0 70.011 0 27.386 37.776-5.344 79.967.727l47.639 6.854c7.557 1.088 15.231 1.088 22.788 0l47.639-6.854z" fill="currentColor"/>
+      </svg>
+      <span>breadcrumb</span>
+    </a>
+
+    <!-- Progress -->
+    <div id="progress-wrap" class="flex flex-col items-center gap-2.5 mb-14">
+      <div class="flex items-center">
+        {[0, 1, 2].map((i) => (
+          <>
+            <div
+              class:list={['step-dot w-2 h-2 rounded-full transition-colors duration-200', i === 0 ? 'bg-fg' : 'bg-border-strong']}
+              data-index={i}
+            ></div>
+            {i < 2 && <div class="w-9 h-px bg-border"></div>}
+          </>
+        ))}
+      </div>
+      <span id="step-label" class="font-mono text-[11px] text-fg-3">Step 1 of 3</span>
+    </div>
+
+    <div class="w-full max-w-[540px]">
+
+      <!-- Step 1: email + deployment -->
+      <div class="step-panel active" id="panel-0">
+        <div class="mb-8">
+          <h1 class="font-display text-[clamp(22px,4vw,30px)] font-semibold tracking-tight text-fg mb-2">Let's get you on the list.</h1>
+          <p class="text-[15px] text-fg-2">A couple of quick questions first.</p>
+        </div>
+
+        <div class="flex flex-col gap-5 mb-9">
+          <!-- Email -->
+          <div class="flex flex-col gap-1.5">
+            <label class="text-[13px] font-medium text-fg font-display" for="email">Email address</label>
+            <input
+              id="email" name="email" type="email"
+              placeholder="you@company.com" autocomplete="email"
+              class="w-full px-3.5 py-2.5 text-sm text-fg bg-white border-[1.5px] border-border rounded-lg outline-none placeholder:text-fg-3 focus:border-fg transition-colors font-display"
+            />
+            <span id="email-error" class="hidden text-[12px] text-[#b84040] font-display">Please enter a valid email.</span>
+          </div>
+
+          <!-- Deployment -->
+          <div class="flex flex-col gap-2">
+            <span class="text-[13px] font-medium text-fg font-display">How do you want to run Breadcrumb?</span>
+            <div class="grid grid-cols-3 gap-2.5">
+              {[
+                { value: 'cloud', label: 'Cloud hosted', sub: 'We handle infra'    },
+                { value: 'self',  label: 'Self-hosted',  sub: 'Your own servers'   },
+                { value: 'idk',   label: 'Not sure',     sub: "I'll figure it out" },
+              ].map((o) => (
+                <label class="flex flex-col gap-1 p-4 border-[1.5px] border-border rounded-xl cursor-pointer select-none transition-[border-color,background] hover:border-border-strong hover:bg-surface [&:has(input:checked)]:border-fg [&:has(input:checked)]:bg-white">
+                  <input type="radio" name="deploy" value={o.value} class="sr-only" />
+                  <span class="font-display text-sm font-semibold text-fg tracking-tight">{o.label}</span>
+                  <span class="font-mono text-[11px] text-fg-3">{o.sub}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div class="flex">
+          <button data-next class="btn-next">Continue</button>
+        </div>
+      </div>
+
+      <!-- Step 2: scale -->
+      <div class="step-panel" id="panel-1">
+        <div class="mb-8">
+          <h1 class="font-display text-[clamp(22px,4vw,30px)] font-semibold tracking-tight text-fg mb-2">How many LLM calls per day?</h1>
+          <p class="text-[15px] text-fg-2">Rough estimate is fine.</p>
+        </div>
+        <div class="grid grid-cols-2 gap-2.5 mb-9">
+          {[
+            { value: 'proto',  label: 'Still prototyping', sub: 'Under 100' },
+            { value: 'small',  label: 'Getting traction',  sub: '100 – 10k' },
+            { value: 'medium', label: 'Scaling up',        sub: '10k – 1M'  },
+            { value: 'large',  label: 'Running at scale',  sub: '1M+'       },
+          ].map((o) => (
+            <label class="flex flex-col gap-1 p-4 border-[1.5px] border-border rounded-xl cursor-pointer select-none transition-[border-color,background] hover:border-border-strong hover:bg-surface [&:has(input:checked)]:border-fg [&:has(input:checked)]:bg-white">
+              <input type="radio" name="scale" value={o.value} class="sr-only" />
+              <span class="font-display text-sm font-semibold text-fg tracking-tight">{o.label}</span>
+              <span class="font-mono text-[11px] text-fg-3">{o.sub}</span>
+            </label>
+          ))}
+        </div>
+        <div class="flex items-center gap-2.5">
+          <button data-back class="btn-back">Back</button>
+          <button data-next class="btn-next">Continue</button>
+        </div>
+      </div>
+
+      <!-- Step 3: comments + submit -->
+      <div class="step-panel" id="panel-2">
+        <div class="mb-8">
+          <h1 class="font-display text-[clamp(22px,4vw,30px)] font-semibold tracking-tight text-fg mb-2">Anything else?</h1>
+          <p class="text-[15px] text-fg-2">Tell us what you're building. We read every response.</p>
+        </div>
+        <form id="wl-form" novalidate class="flex flex-col gap-5">
+          <textarea
+            id="comments" name="comments" rows="4"
+            placeholder="What are you working on? Anything specific you want from an LLM tracing tool?"
+            class="w-full px-3.5 py-2.5 text-sm text-fg bg-white border-[1.5px] border-border rounded-lg outline-none placeholder:text-fg-3 focus:border-fg transition-colors resize-y font-display"
+          ></textarea>
+          <div class="flex flex-col gap-2">
+            <div class="flex items-center gap-2.5">
+              <button type="button" data-back class="btn-back">Back</button>
+              <button type="submit" id="submit-btn" class="btn-next">
+                <span class="btn-label">Submit</span>
+                <span class="btn-loading hidden">Sending…</span>
+              </button>
+            </div>
+            <span id="submit-error" class="hidden text-[12px] text-[#b84040] font-display">
+              Something went wrong — please try again.
+            </span>
+          </div>
+        </form>
+      </div>
+
+      <!-- Success -->
+      <div class="step-panel" id="panel-success">
+        <div class="text-center py-6">
+          <div class="w-12 h-12 bg-fg rounded-full flex items-center justify-center mx-auto mb-7">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M5 12l5 5L19 7" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <h1 class="font-display text-[28px] font-semibold tracking-tight text-fg mb-3">You're on the list.</h1>
+          <p class="text-[15px] leading-[1.65] text-fg-2 max-w-[360px] mx-auto mb-7">
+            We'll reach out when Breadcrumb is ready. If something you wrote sparked a question, we might follow up.
+          </p>
+          <a href="/" class="btn-next inline-flex">Back to home</a>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</Layout>
+
+<style>
+  .step-panel        { display: none; animation: fadeUp 0.2s ease both; }
+  .step-panel.active { display: block; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .btn-next {
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 22px;
+    background: #0f0f0f;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-family: var(--font-display);
+    transition: opacity 0.15s, transform 0.12s;
+    text-decoration: none;
+  }
+  .btn-next:hover  { opacity: 0.82; }
+  .btn-next:active { transform: scale(0.98); }
+
+  .btn-back {
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 18px;
+    background: transparent;
+    color: #555;
+    font-size: 14px;
+    font-weight: 500;
+    border-radius: 8px;
+    border: 1.5px solid #e8e8e8;
+    cursor: pointer;
+    font-family: var(--font-display);
+    transition: border-color 0.14s, color 0.14s;
+  }
+  .btn-back:hover { border-color: #d0d0d0; color: #0f0f0f; }
+
+  #submit-btn.loading .btn-label   { display: none; }
+  #submit-btn.loading .btn-loading { display: inline !important; }
+</style>
+
+<script>
+  const STEPS = 3;
+  const panels = Array.from(document.querySelectorAll<HTMLElement>('.step-panel'));
+  const dots   = Array.from(document.querySelectorAll<HTMLElement>('.step-dot'));
+  const label  = document.getElementById('step-label')!;
+  const progressWrap = document.getElementById('progress-wrap')!;
+
+  let current = 0;
+
+  // Pre-fill email from URL param (set by homepage form)
+  const params = new URLSearchParams(window.location.search);
+  const prefillEmail = params.get('email');
+  const emailInput = document.getElementById('email') as HTMLInputElement;
+  const emailError = document.getElementById('email-error')!;
+  if (prefillEmail && emailInput) emailInput.value = prefillEmail;
+
+  function goTo(n: number) {
+    panels[current]?.classList.remove('active');
+    if (current < STEPS) {
+      dots[current].classList.remove('bg-fg');
+      dots[current].classList.add('bg-border-strong');
+    }
+
+    current = n;
+    panels[current]?.classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    if (current < STEPS) {
+      dots[current].classList.remove('bg-border-strong');
+      dots[current].classList.add('bg-fg');
+      label.textContent = `Step ${current + 1} of ${STEPS}`;
+    } else {
+      progressWrap.style.visibility = 'hidden';
+    }
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-next]').forEach((btn) =>
+    btn.addEventListener('click', () => {
+      // Validate email before leaving step 1
+      if (current === 0) {
+        if (!emailInput.value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput.value)) {
+          emailError.classList.remove('hidden');
+          emailInput.focus();
+          return;
+        }
+        emailError.classList.add('hidden');
+      }
+      if (current < STEPS - 1) goTo(current + 1);
+    })
+  );
+
+  document.querySelectorAll<HTMLElement>('[data-back]').forEach((btn) =>
+    btn.addEventListener('click', () => { if (current > 0) goTo(current - 1); })
+  );
+
+  // Submit from step 3
+  const form        = document.getElementById('wl-form') as HTMLFormElement;
+  const submitBtn   = document.getElementById('submit-btn') as HTMLButtonElement;
+  const submitError = document.getElementById('submit-error')!;
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    submitBtn.classList.add('loading');
+    submitBtn.disabled = true;
+    submitError.classList.add('hidden');
+
+    const deploy   = document.querySelector<HTMLInputElement>('input[name="deploy"]:checked')?.value;
+    const scale    = document.querySelector<HTMLInputElement>('input[name="scale"]:checked')?.value;
+    const comments = (document.getElementById('comments') as HTMLTextAreaElement)?.value?.trim();
+
+    try {
+      const res = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailInput.value, deploy, scale, comments }),
+      });
+      if (!res.ok) throw new Error(`${res.status}`);
+      goTo(STEPS);
+    } catch {
+      submitBtn.classList.remove('loading');
+      submitBtn.disabled = false;
+      submitError.classList.remove('hidden');
+    }
+  });
+</script>

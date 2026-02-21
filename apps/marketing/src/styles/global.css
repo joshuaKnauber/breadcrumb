@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+  --color-fg:            #0f0f0f;
+  --color-fg-2:          #555555;
+  --color-fg-3:          #999999;
+  --color-border:        #e8e8e8;
+  --color-border-strong: #d0d0d0;
+  --color-surface:       #f7f7f7;
+  --color-surface-2:     #f2f2f2;
+  --color-accent:        #c8903a;
+
+  --font-display: 'Geist', system-ui, sans-serif;
+  --font-mono:    'Geist Mono', monospace;
+}
+
+html {
+  background: #fff;
+  color: #0f0f0f;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
