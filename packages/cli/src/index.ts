@@ -4,7 +4,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { breadcrumb } from "@breadcrumb-sh/core";
-import { sqlite } from "@breadcrumb-sh/core/adapters";
+import { postgres, sqlite } from "@breadcrumb-sh/core/adapters";
 import { toNodeHandler } from "@breadcrumb-sh/core/node";
 
 const [command, ...rest] = process.argv.slice(2);
@@ -14,16 +14,38 @@ switch (command) {
     await dev(rest);
     break;
   case "migrate":
-    console.error("breadcrumb migrate: not implemented yet — coming with the postgres adapter.");
-    process.exit(1);
+    await migrate(rest);
     break;
   default:
     console.log(`breadcrumb — embeddable LLM tracing
 
 Usage:
   breadcrumb dev [--port 4106] [--db .breadcrumb/dev.db]   Standalone local server (SQLite + UI)
-  breadcrumb migrate                                        Apply schema to your database`);
+  breadcrumb migrate [--database <url|path>]               Apply schema (additive-only) to your DB
+                                                           (defaults to $DATABASE_URL)`);
     process.exit(command ? 1 : 0);
+}
+
+async function migrate(args: string[]) {
+  const { values } = parseArgs({
+    args,
+    options: { database: { type: "string" } },
+  });
+  const target = values.database ?? process.env.DATABASE_URL;
+  if (!target) {
+    console.error("breadcrumb migrate: pass --database <url|path> or set DATABASE_URL.");
+    process.exit(1);
+  }
+
+  const adapter = /^postgres(ql)?:/.test(target) ? postgres(target) : sqlite(target);
+  console.log(`▸ migrating ${adapter.id} database…`);
+  const result = await adapter.migrate();
+  for (const table of result.createdTables) console.log(`  created table ${table}`);
+  for (const column of result.addedColumns) console.log(`  added column ${column}`);
+  if (result.createdTables.length === 0 && result.addedColumns.length === 0) {
+    console.log("  already up to date");
+  }
+  await adapter.close?.();
 }
 
 async function dev(args: string[]) {

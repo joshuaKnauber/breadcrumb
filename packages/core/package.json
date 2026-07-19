@@ -27,14 +27,19 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "better-sqlite3": ">=11"
+    "better-sqlite3": ">=11",
+    "pg": ">=8"
   },
   "peerDependenciesMeta": {
     "better-sqlite3": {
       "optional": true
+    },
+    "pg": {
+      "optional": true
     }
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.2",
     "better-sqlite3": "^11.7.0",

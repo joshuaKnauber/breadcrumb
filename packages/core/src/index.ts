@@ -4,6 +4,7 @@ import {
   type TelemetryOptions,
   type TelemetrySettings,
 } from "./otel/pipeline.js";
+import { createSweeper, type RetentionOptions } from "./retention.js";
 import { createHandler } from "./router.js";
 import { createTraceFn, type TraceFn } from "./trace.js";
 
@@ -19,6 +20,11 @@ export interface BreadcrumbOptions {
    * Omit entirely if only this app writes traces — the endpoints then 404.
    */
   ingest?: { apiKey: string };
+  /**
+   * Retention windows per environment. Defaults: 90d, development 7d.
+   * Sweeps are bounded and piggyback on ingest — no cron needed.
+   */
+  retention?: RetentionOptions;
 }
 
 export interface Breadcrumb {
@@ -35,6 +41,8 @@ export interface Breadcrumb {
     listTraces(options?: ListTracesOptions): Promise<TraceSummary[]>;
     getTrace(options: { id: string }): Promise<SpanRecord[]>;
     ingestSpans(options: { spans: SpanRecord[] }): Promise<void>;
+    /** One bounded retention batch (for cron/manual sweeping); returns rows deleted. */
+    runRetention(): Promise<number>;
   };
   options: Required<Pick<BreadcrumbOptions, "basePath" | "environment">> & BreadcrumbOptions;
 }
@@ -50,7 +58,9 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
 
   // Lazy one-time migrate before the first DB operation.
   let readyPromise: Promise<void> | null = null;
-  const ready = () => (readyPromise ??= adapter.migrate());
+  const ready = () => (readyPromise ??= adapter.migrate().then(() => undefined));
+
+  const sweeper = createSweeper(adapter, options.retention);
 
   const api: Breadcrumb["api"] = {
     async listTraces(opts = {}) {
@@ -64,6 +74,11 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
     async ingestSpans({ spans }) {
       await ready();
       await adapter.insertSpans(spans);
+      await sweeper.maybeSweep();
+    },
+    async runRetention() {
+      await ready();
+      return sweeper.run();
     },
   };
 
@@ -101,3 +116,5 @@ export type {
 } from "./db/types.js";
 export type { SpanAttrs, SpanContext, TraceAttrs, TraceFn } from "./trace.js";
 export type { TelemetryOptions, TelemetrySettings } from "./otel/pipeline.js";
+export type { RetentionOptions } from "./retention.js";
+export type { MigrationResult, RetentionRule } from "./db/types.js";
