@@ -1,1 +1,0 @@
-ALTER TABLE "starred_charts" ADD COLUMN "default_days" integer;

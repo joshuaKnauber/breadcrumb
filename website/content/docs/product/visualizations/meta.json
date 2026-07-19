@@ -1,8 +1,0 @@
-{
-  "title": "Visualizations",
-  "collapsible": true,
-  "pages": [
-    "dashboard",
-    "traces"
-  ]
-}

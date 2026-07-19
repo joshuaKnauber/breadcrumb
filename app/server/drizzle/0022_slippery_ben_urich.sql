@@ -1,1 +1,0 @@
-ALTER TABLE "project" ADD COLUMN "agent_memory" text DEFAULT '' NOT NULL;
