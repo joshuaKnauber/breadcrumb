@@ -1,0 +1,25 @@
+{
+  "name": "@breadcrumb-sh/cli",
+  "version": "0.0.0",
+  "description": "CLI for breadcrumb — local dev server and migrations.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "breadcrumb": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@breadcrumb-sh/core": "0.0.0",
+    "better-sqlite3": "^11.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsdown": "^0.12.9"
+  }
+}

@@ -1,5 +1,0 @@
-# @breadcrumb-sh/ai-sdk
-
-Vercel AI SDK integration for Breadcrumb.
-
-> **Note:** v3 rebuild in progress. This package is intentionally empty.
