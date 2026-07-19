@@ -26,6 +26,7 @@ describe("manual tracing", () => {
     });
 
     expect(result).toBe("done");
+    await bc.flush();
 
     const traces = await bc.api.listTraces();
     expect(traces).toHaveLength(1);
@@ -58,12 +59,72 @@ describe("manual tracing", () => {
         });
       })
     ).rejects.toThrow("kaputt");
+    await bc.flush();
 
     const traces = await bc.api.listTraces();
     expect(traces).toHaveLength(1);
     expect(traces[0]!.errorCount).toBe(2); // child failed, root failed via rethrow
     const spans = await bc.api.getTrace({ id: traces[0]!.traceId });
     expect(spans.find((s) => s.name === "boom")!.error).toBe("kaputt");
+  });
+});
+
+describe("bc.telemetry (AI SDK dialect)", () => {
+  it("normalizes ai.* spans emitted through the returned tracer", async () => {
+    const bc = makeBc();
+    const settings = bc.telemetry({ functionId: "support-reply", metadata: { userId: "u1" } });
+    expect(settings.isEnabled).toBe(true);
+    expect(settings.functionId).toBe("support-reply");
+
+    // Simulate what generateText does with these settings: an outer span with
+    // telemetry attrs, a nested doGenerate span with model/usage attrs.
+    await settings.tracer.startActiveSpan(
+      "ai.generateText",
+      {
+        attributes: {
+          "ai.operationId": "ai.generateText",
+          "ai.telemetry.functionId": "support-reply",
+          "ai.telemetry.metadata.userId": "u1",
+          "ai.prompt": '{"prompt":"hallo"}',
+          "ai.response.text": "welt",
+        },
+      },
+      async (outer) => {
+        await settings.tracer.startActiveSpan(
+          "ai.generateText.doGenerate",
+          {
+            attributes: {
+              "ai.operationId": "ai.generateText.doGenerate",
+              "ai.model.id": "gpt-5",
+              "ai.model.provider": "openai",
+              "ai.usage.promptTokens": 120,
+              "ai.usage.completionTokens": 40,
+              "ai.response.text": "welt",
+            },
+          },
+          async (inner) => inner.end()
+        );
+        outer.end();
+      }
+    );
+    await bc.flush();
+
+    const traces = await bc.api.listTraces();
+    expect(traces).toHaveLength(1);
+    expect(traces[0]).toMatchObject({
+      name: "support-reply",
+      userId: "u1",
+      spanCount: 2,
+      inputTokens: 120,
+      outputTokens: 40,
+    });
+
+    const spans = await bc.api.getTrace({ id: traces[0]!.traceId });
+    const llm = spans.find((s) => s.kind === "llm")!;
+    expect(llm).toMatchObject({ model: "gpt-5", provider: "openai", output: "welt" });
+    const root = spans.find((s) => s.parentSpanId === null)!;
+    expect(root.input).toEqual({ prompt: "hallo" });
+    expect(llm.parentSpanId).toBe(root.id);
   });
 });
 
@@ -74,6 +135,7 @@ describe("handler", () => {
   it("serves the UI shell and trace queries under the base path", async () => {
     const bc = makeBc();
     await bc.trace("t", async () => "x");
+    await bc.flush();
 
     const html = await get(bc, "/admin/traces");
     expect(html.status).toBe(200);

@@ -1,6 +1,11 @@
 import type { DatabaseAdapter, ListTracesOptions, SpanRecord, TraceSummary } from "./db/types.js";
+import {
+  createTelemetryPipeline,
+  type TelemetryOptions,
+  type TelemetrySettings,
+} from "./otel/pipeline.js";
 import { createHandler } from "./router.js";
-import { createTracer, type TraceFn } from "./trace.js";
+import { createTraceFn, type TraceFn } from "./trace.js";
 
 export interface BreadcrumbOptions {
   /** Database adapter, e.g. sqlite(".breadcrumb/dev.db") from @breadcrumb-sh/core/adapters */
@@ -21,6 +26,10 @@ export interface Breadcrumb {
   handler: (request: Request) => Promise<Response>;
   /** Manual tracing: bc.trace("name", { userId }, async (t) => { ... t.span(...) }) */
   trace: TraceFn;
+  /** Preconfigured experimental_telemetry settings for the Vercel AI SDK. */
+  telemetry: (options?: TelemetryOptions) => TelemetrySettings;
+  /** Flush buffered spans (serverless: call before the runtime freezes). */
+  flush: () => Promise<void>;
   /** Programmatic queries + ingest, callable server-side without HTTP. */
   api: {
     listTraces(options?: ListTracesOptions): Promise<TraceSummary[]>;
@@ -58,10 +67,11 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
     },
   };
 
-  const trace = createTracer({
+  const pipeline = createTelemetryPipeline({
     environment,
     write: (spans) => api.ingestSpans({ spans }),
   });
+  const trace = createTraceFn(pipeline.tracer);
 
   const handler = createHandler({
     basePath,
@@ -74,6 +84,8 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
   return {
     handler,
     trace,
+    telemetry: pipeline.telemetry,
+    flush: pipeline.flush,
     api,
     options: { ...options, basePath, environment },
   };
@@ -88,3 +100,4 @@ export type {
   SpanStatus,
 } from "./db/types.js";
 export type { SpanAttrs, SpanContext, TraceAttrs, TraceFn } from "./trace.js";
+export type { TelemetryOptions, TelemetrySettings } from "./otel/pipeline.js";

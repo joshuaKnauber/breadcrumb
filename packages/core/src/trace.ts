@@ -1,4 +1,5 @@
-import type { SpanKind, SpanRecord } from "./db/types.js";
+import { SpanStatusCode, type Span, type Tracer } from "@opentelemetry/api";
+import type { SpanKind } from "./db/types.js";
 
 export interface SpanAttrs {
   kind?: SpanKind;
@@ -15,7 +16,6 @@ export interface SpanAttrs {
 export interface TraceAttrs {
   userId?: string;
   sessionId?: string;
-  environment?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -32,92 +32,62 @@ export type TraceFn = {
   <T>(name: string, attrs: TraceAttrs, fn: (t: SpanContext) => T | Promise<T>): Promise<T>;
 };
 
-interface TracerDeps {
-  environment: string;
-  write(spans: SpanRecord[]): Promise<void>;
-  onError?(error: unknown): void;
+function applySpanAttrs(span: Span, attrs: SpanAttrs): void {
+  if (attrs.kind !== undefined) span.setAttribute("breadcrumb.kind", attrs.kind);
+  if (attrs.model !== undefined) span.setAttribute("breadcrumb.model", attrs.model);
+  if (attrs.provider !== undefined) span.setAttribute("breadcrumb.provider", attrs.provider);
+  if (attrs.inputTokens !== undefined) span.setAttribute("breadcrumb.inputTokens", attrs.inputTokens);
+  if (attrs.outputTokens !== undefined) span.setAttribute("breadcrumb.outputTokens", attrs.outputTokens);
+  if (attrs.cost !== undefined) span.setAttribute("breadcrumb.cost", attrs.cost);
+  if (attrs.input !== undefined) span.setAttribute("breadcrumb.input", JSON.stringify(attrs.input));
+  if (attrs.output !== undefined) span.setAttribute("breadcrumb.output", JSON.stringify(attrs.output));
+  if (attrs.metadata !== undefined) span.setAttribute("breadcrumb.metadata", JSON.stringify(attrs.metadata));
 }
 
-function newId(): string {
-  return crypto.randomUUID();
+function applyTraceAttrs(span: Span, attrs: TraceAttrs): void {
+  if (attrs.userId !== undefined) span.setAttribute("breadcrumb.userId", attrs.userId);
+  if (attrs.sessionId !== undefined) span.setAttribute("breadcrumb.sessionId", attrs.sessionId);
+  if (attrs.metadata !== undefined) span.setAttribute("breadcrumb.metadata", JSON.stringify(attrs.metadata));
 }
 
-export function createTracer(deps: TracerDeps): TraceFn {
-  async function runSpan<T>(
-    collected: SpanRecord[],
-    traceId: string,
-    parentSpanId: string | null,
-    trace: Pick<TraceAttrs, "userId" | "sessionId" | "environment">,
+/**
+ * Manual tracing built on the same OTel tracer as bc.telemetry(): AI SDK
+ * calls made inside a bc.trace() callback nest into the same trace via
+ * context propagation.
+ */
+export function createTraceFn(tracer: Tracer): TraceFn {
+  function runSpan<T>(
     name: string,
-    attrs: SpanAttrs,
+    apply: (span: Span) => void,
     fn: (s: SpanContext) => T | Promise<T>
   ): Promise<T> {
-    const record: SpanRecord = {
-      id: newId(),
-      traceId,
-      parentSpanId,
-      name,
-      kind: attrs.kind ?? "span",
-      environment: trace.environment ?? deps.environment,
-      userId: trace.userId ?? null,
-      sessionId: trace.sessionId ?? null,
-      status: "ok",
-      startTime: Date.now(),
-      ...spanFields(attrs),
-    };
-    collected.push(record);
-
-    const ctx: SpanContext = {
-      set(next) {
-        Object.assign(record, spanFields(next));
-        if (next.kind) record.kind = next.kind;
-      },
-      span(childName: string, attrsOrFn: any, maybeFn?: any) {
-        const childAttrs: SpanAttrs = typeof attrsOrFn === "function" ? {} : attrsOrFn;
-        const childFn = typeof attrsOrFn === "function" ? attrsOrFn : maybeFn;
-        return runSpan(collected, traceId, record.id, trace, childName, childAttrs, childFn);
-      },
-    };
-
-    try {
-      return await fn(ctx);
-    } catch (error) {
-      record.status = "error";
-      record.error = error instanceof Error ? error.message : String(error);
-      throw error;
-    } finally {
-      record.endTime = Date.now();
-    }
+    return tracer.startActiveSpan(name, async (span) => {
+      apply(span);
+      const ctx: SpanContext = {
+        set: (next) => applySpanAttrs(span, next),
+        span(childName: string, attrsOrFn: any, maybeFn?: any) {
+          const childAttrs: SpanAttrs = typeof attrsOrFn === "function" ? {} : attrsOrFn;
+          const childFn = typeof attrsOrFn === "function" ? attrsOrFn : maybeFn;
+          return runSpan(childName, (s) => applySpanAttrs(s, childAttrs), childFn);
+        },
+      };
+      try {
+        return await fn(ctx);
+      } catch (error) {
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      } finally {
+        span.end();
+      }
+    });
   }
 
-  return async function trace(name: string, attrsOrFn: any, maybeFn?: any) {
+  return function trace(name: string, attrsOrFn: any, maybeFn?: any) {
     const attrs: TraceAttrs = typeof attrsOrFn === "function" ? {} : attrsOrFn;
     const fn = typeof attrsOrFn === "function" ? attrsOrFn : maybeFn;
-    const collected: SpanRecord[] = [];
-    const traceId = newId();
-
-    try {
-      return await runSpan(collected, traceId, null, attrs, name, { metadata: attrs.metadata }, fn);
-    } finally {
-      try {
-        await deps.write(collected);
-      } catch (error) {
-        // Tracing must never take the host app down with it.
-        (deps.onError ?? ((e) => console.error("[breadcrumb] failed to write trace:", e)))(error);
-      }
-    }
+    return runSpan(name, (span) => applyTraceAttrs(span, attrs), fn);
   } as TraceFn;
-}
-
-function spanFields(attrs: SpanAttrs): Partial<SpanRecord> {
-  const out: Partial<SpanRecord> = {};
-  if (attrs.model !== undefined) out.model = attrs.model;
-  if (attrs.provider !== undefined) out.provider = attrs.provider;
-  if (attrs.inputTokens !== undefined) out.inputTokens = attrs.inputTokens;
-  if (attrs.outputTokens !== undefined) out.outputTokens = attrs.outputTokens;
-  if (attrs.cost !== undefined) out.cost = attrs.cost;
-  if (attrs.input !== undefined) out.input = attrs.input;
-  if (attrs.output !== undefined) out.output = attrs.output;
-  if (attrs.metadata !== undefined) out.metadata = attrs.metadata;
-  return out;
 }

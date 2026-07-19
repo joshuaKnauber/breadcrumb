@@ -1,11 +1,11 @@
 {
   "name": "@breadcrumb-sh/cli",
   "version": "0.0.0",
-  "description": "CLI for breadcrumb — local dev server and migrations.",
+  "description": "CLI for breadcrumb \u2014 local dev server and migrations.",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "breadcrumb": "./dist/index.js"
+    "breadcrumb": "./dist/index.mjs"
   },
   "files": [
     "dist"
@@ -20,6 +20,6 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
-    "tsdown": "^0.12.9"
+    "tsdown": "^0.22.11"
   }
 }

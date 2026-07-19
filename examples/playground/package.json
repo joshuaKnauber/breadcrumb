@@ -1,0 +1,19 @@
+{
+  "name": "playground",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@breadcrumb-sh/core": "0.0.0",
+    "ai": "^5.0.0",
+    "better-sqlite3": "^11.7.0"
+  },
+  "devDependencies": {
+    "@ai-sdk/provider": "^2.0.3",
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2"
+  }
+}
