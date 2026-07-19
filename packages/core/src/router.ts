@@ -1,10 +1,18 @@
 import type { DatabaseAdapter, SpanRecord } from "./db/types.js";
+import { normalizeSpanData } from "./otel/normalize.js";
+import { parseOtlpJson } from "./otel/otlp.js";
 import { renderAppHtml } from "./ui.js";
+
+export type AuthorizeFn = (
+  request: Request
+) => boolean | Response | undefined | null | Promise<boolean | Response | undefined | null>;
 
 export interface RouterContext {
   basePath: string;
   environment: string;
   ingestApiKey: string | undefined;
+  /** Guards UI/query routes only — ingest routes use the API key. */
+  authorize?: AuthorizeFn;
   adapter: DatabaseAdapter;
   ready: () => Promise<void>;
 }
@@ -70,9 +78,12 @@ export function createHandler(ctx: RouterContext): (request: Request) => Promise
     const method = request.method.toUpperCase();
 
     // --- ingest routes: API-key auth, meant to sit OUTSIDE the user's UI auth ---
-    if (path === "/api/ingest/spans" && method === "POST") {
+    if (path.startsWith("/api/ingest/") && method === "POST") {
       if (!ctx.ingestApiKey) return json({ error: "not found" }, 404);
-      const key = request.headers.get(INGEST_KEY_HEADER);
+      const key =
+        request.headers.get(INGEST_KEY_HEADER) ??
+        request.headers.get("authorization")?.replace(/^Bearer /, "") ??
+        null;
       if (!key || !timingSafeEqual(key, ctx.ingestApiKey)) {
         return json({ error: "unauthorized" }, 401);
       }
@@ -82,16 +93,34 @@ export function createHandler(ctx: RouterContext): (request: Request) => Promise
       } catch {
         return json({ error: "invalid json" }, 400);
       }
-      if (!Array.isArray(body?.spans)) return json({ error: "expected { spans: [] }" }, 400);
-      const spans = body.spans
-        .map((s: unknown) => normalizeIngestedSpan(s, ctx.environment))
-        .filter((s: SpanRecord | null): s is SpanRecord => s !== null);
-      await ctx.ready();
-      await ctx.adapter.insertSpans(spans);
-      return json({ ingested: spans.length });
+
+      if (path === "/api/ingest/spans") {
+        if (!Array.isArray(body?.spans)) return json({ error: "expected { spans: [] }" }, 400);
+        const spans = body.spans
+          .map((s: unknown) => normalizeIngestedSpan(s, ctx.environment))
+          .filter((s: SpanRecord | null): s is SpanRecord => s !== null);
+        await ctx.ready();
+        await ctx.adapter.insertSpans(spans);
+        return json({ ingested: spans.length });
+      }
+
+      // OTLP/HTTP JSON (standard exporters: OTEL_EXPORTER_OTLP_ENDPOINT + headers)
+      if (path === "/api/ingest/otel" || path === "/api/ingest/otel/v1/traces") {
+        const spans = parseOtlpJson(body).map((s) => normalizeSpanData(s, ctx.environment));
+        await ctx.ready();
+        await ctx.adapter.insertSpans(spans);
+        return json({ partialSuccess: {} });
+      }
+
+      return json({ error: "not found" }, 404);
     }
 
-    // --- UI/query routes: no auth here, the user wraps the mount ---
+    // --- UI/query routes: wrapped by the user's middleware and/or `authorize` ---
+    if (ctx.authorize) {
+      const verdict = await ctx.authorize(request);
+      if (verdict instanceof Response) return verdict;
+      if (verdict !== true) return json({ error: "unauthorized" }, 401);
+    }
     if (method === "GET") {
       if (path === "/") {
         return new Response(renderAppHtml(basePath || "/"), {

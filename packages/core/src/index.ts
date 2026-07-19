@@ -5,7 +5,7 @@ import {
   type TelemetrySettings,
 } from "./otel/pipeline.js";
 import { createSweeper, type RetentionOptions } from "./retention.js";
-import { createHandler } from "./router.js";
+import { createHandler, type AuthorizeFn } from "./router.js";
 import { createTraceFn, type TraceFn } from "./trace.js";
 
 export interface BreadcrumbOptions {
@@ -25,6 +25,12 @@ export interface BreadcrumbOptions {
    * Sweeps are bounded and piggyback on ingest — no cron needed.
    */
   retention?: RetentionOptions;
+  /**
+   * Guards the UI/query routes (ingest routes use the API key instead).
+   * Return true to allow, false to 401, or a Response (e.g. a redirect).
+   * Alternative to wrapping the mount in middleware.
+   */
+  authorize?: AuthorizeFn;
 }
 
 export interface Breadcrumb {
@@ -92,6 +98,7 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
     basePath,
     environment,
     ingestApiKey: options.ingest?.apiKey,
+    authorize: options.authorize,
     adapter,
     ready,
   });
@@ -118,3 +125,4 @@ export type { SpanAttrs, SpanContext, TraceAttrs, TraceFn } from "./trace.js";
 export type { TelemetryOptions, TelemetrySettings } from "./otel/pipeline.js";
 export type { RetentionOptions } from "./retention.js";
 export type { MigrationResult, RetentionRule } from "./db/types.js";
+export type { AuthorizeFn } from "./router.js";

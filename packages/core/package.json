@@ -19,6 +19,10 @@
     "./node": {
       "types": "./dist/node.d.mts",
       "import": "./dist/node.mjs"
+    },
+    "./next": {
+      "types": "./dist/next.d.mts",
+      "import": "./dist/next.mjs"
     }
   },
   "scripts": {

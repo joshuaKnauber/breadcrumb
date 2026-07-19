@@ -8,7 +8,7 @@ import {
   type SpanExporter,
 } from "@opentelemetry/sdk-trace-base";
 import type { SpanRecord } from "../db/types.js";
-import { normalizeOtelSpan } from "./normalize.js";
+import { fromReadableSpan, normalizeSpanData } from "./normalize.js";
 
 /** Matches the AI SDK's telemetry metadata constraint (OTel AttributeValue). */
 export type TelemetryMetadataValue = string | number | boolean | string[] | number[] | boolean[];
@@ -54,7 +54,7 @@ class AdapterSpanExporter implements SpanExporter {
   ) {}
 
   export(spans: ReadableSpan[], resultCallback: (result: ExportResult) => void): void {
-    this.write(spans.map((s) => normalizeOtelSpan(s, this.environment)))
+    this.write(spans.map((s) => normalizeSpanData(fromReadableSpan(s), this.environment)))
       .then(() => resultCallback({ code: ExportResultCode.SUCCESS }))
       .catch((error) => {
         console.error("[breadcrumb] failed to write spans:", error);

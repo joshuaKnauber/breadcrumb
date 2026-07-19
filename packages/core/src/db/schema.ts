@@ -40,3 +40,11 @@ export const spanIndexes: { name: string; columns: string[] }[] = [
   { name: "breadcrumb_spans_trace_id", columns: ["trace_id"] },
   { name: "breadcrumb_spans_env_start", columns: ["environment", "start_time"] },
 ];
+
+/** Tiny key/value table for cross-instance coordination (sweep claims). */
+export const META_TABLE = "breadcrumb_meta";
+
+export const metaColumns: Record<string, ColumnSpec> = {
+  key: { type: "text", primary: true },
+  value: { type: "integer" },
+};

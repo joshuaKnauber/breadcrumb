@@ -76,5 +76,10 @@ export interface DatabaseAdapter {
   getTraceSpans(traceId: string): Promise<SpanRecord[]>;
   /** Bounded delete of expired spans; returns rows deleted (may be < the backlog). */
   deleteExpiredSpans(rules: RetentionRule[], limit: number): Promise<number>;
+  /**
+   * Atomically claim the sweep slot: true if this caller may sweep now
+   * (no other instance swept within intervalMs). DB-backed, pool-safe.
+   */
+  claimSweep(now: number, intervalMs: number): Promise<boolean>;
   close?(): Promise<void>;
 }

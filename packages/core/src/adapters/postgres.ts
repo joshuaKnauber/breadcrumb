@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import type { DatabaseAdapter, ListTracesOptions } from "../db/types.js";
-import { SPANS_TABLE, spanColumns, spanIndexes, type ColumnSpec } from "../db/schema.js";
+import { META_TABLE, SPANS_TABLE, spanColumns, spanIndexes, type ColumnSpec } from "../db/schema.js";
 import { rowToSpan, rowToTraceSummary, spanToRow, traceSummarySelect } from "../db/rows.js";
 
 const PG_TYPES = { text: "TEXT", integer: "BIGINT", real: "DOUBLE PRECISION", json: "JSONB" } as const;
@@ -70,7 +70,28 @@ export function postgres(connectionOrClient: string | PgQueryable): DatabaseAdap
           `CREATE INDEX IF NOT EXISTS ${idx.name} ON ${SPANS_TABLE} (${idx.columns.join(", ")})`
         );
       }
+
+      const meta = await db.query(
+        `SELECT 1 FROM information_schema.tables WHERE table_name = $1`,
+        [META_TABLE]
+      );
+      if (meta.rows.length === 0) {
+        await db.query(
+          `CREATE TABLE IF NOT EXISTS ${META_TABLE} (key TEXT PRIMARY KEY, value BIGINT NOT NULL)`
+        );
+        createdTables.push(META_TABLE);
+      }
       return { createdTables, addedColumns };
+    },
+
+    async claimSweep(now, intervalMs) {
+      const { rows } = await db.query(
+        `INSERT INTO ${META_TABLE} (key, value) VALUES ('last_sweep_at', $1)
+         ON CONFLICT (key) DO UPDATE SET value = $1 WHERE ${META_TABLE}.value <= $2
+         RETURNING value`,
+        [now, now - intervalMs]
+      );
+      return rows.length > 0;
     },
 
     async insertSpans(spans) {

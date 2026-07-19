@@ -65,11 +65,13 @@ export function createSweeper(
     async maybeSweep() {
       if (!auto || sweeping) return;
       const now = Date.now();
+      // Cheap in-process pre-check, then a DB-backed atomic claim so only one
+      // instance sweeps per interval across the whole deployment.
       if (now - lastSweep < SWEEP_INTERVAL_MS) return;
       lastSweep = now;
       sweeping = true;
       try {
-        await run();
+        if (await adapter.claimSweep(now, SWEEP_INTERVAL_MS)) await run();
       } catch (error) {
         console.error("[breadcrumb] retention sweep failed:", error);
       } finally {

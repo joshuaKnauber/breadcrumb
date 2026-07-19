@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import type DatabaseType from "better-sqlite3";
 import type { DatabaseAdapter, ListTracesOptions } from "../db/types.js";
-import { SPANS_TABLE, spanColumns, spanIndexes, type ColumnSpec } from "../db/schema.js";
+import { META_TABLE, SPANS_TABLE, spanColumns, spanIndexes, type ColumnSpec } from "../db/schema.js";
 import { rowToSpan, rowToTraceSummary, spanToRow, traceSummarySelect } from "../db/rows.js";
 
 const SQLITE_TYPES = { text: "TEXT", integer: "INTEGER", real: "REAL", json: "TEXT" } as const;
@@ -76,7 +76,26 @@ export function sqlite(fileOrDb: string | DatabaseType.Database): DatabaseAdapte
           `CREATE INDEX IF NOT EXISTS ${idx.name} ON ${SPANS_TABLE} (${idx.columns.join(", ")})`
         );
       }
+
+      const metaExists = db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+        .get(META_TABLE);
+      if (!metaExists) {
+        db.exec(`CREATE TABLE ${META_TABLE} (key TEXT PRIMARY KEY, value INTEGER NOT NULL)`);
+        createdTables.push(META_TABLE);
+      }
       return { createdTables, addedColumns };
+    },
+
+    async claimSweep(now, intervalMs) {
+      const rows = db
+        .prepare(
+          `INSERT INTO ${META_TABLE} (key, value) VALUES ('last_sweep_at', @now)
+           ON CONFLICT (key) DO UPDATE SET value = @now WHERE ${META_TABLE}.value <= @cutoff
+           RETURNING value`
+        )
+        .all({ now, cutoff: now - intervalMs });
+      return rows.length > 0;
     },
 
     async insertSpans(spans) {

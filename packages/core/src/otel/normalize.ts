@@ -3,24 +3,38 @@ import type { ReadableSpan } from "@opentelemetry/sdk-trace-base";
 import type { SpanKind, SpanRecord } from "../db/types.js";
 
 /**
- * Maps OTel spans into breadcrumb's span model. Understands three dialects:
- * - breadcrumb.* (our own tracer)
- * - ai.*         (Vercel AI SDK experimental_telemetry)
- * - gen_ai.*     (OTel GenAI semantic conventions)
+ * Neutral span shape both ingestion paths produce:
+ * - the in-process exporter (ReadableSpan)
+ * - the OTLP/HTTP endpoint (protobuf-JSON)
+ * normalizeSpanData maps it into breadcrumb's span model, understanding three
+ * attribute dialects: breadcrumb.*, ai.* (Vercel AI SDK), gen_ai.* (OTel GenAI).
  */
+export interface OtelSpanData {
+  traceId: string;
+  spanId: string;
+  parentSpanId: string | null;
+  name: string;
+  attributes: Record<string, unknown>;
+  startMs: number;
+  endMs: number | null;
+  /** null = ok; a string (possibly empty) = error status with message */
+  error: string | null;
+  /** From resource attributes (deployment.environment.name); overrides the default. */
+  environment?: string;
+}
 
 type Attrs = Record<string, unknown>;
-
-function hrToMs(time: [number, number]): number {
-  return time[0] * 1000 + Math.round(time[1] / 1e6);
-}
 
 function str(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
 function num(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value !== "" && Number.isFinite(Number(value))) {
+    return Number(value);
+  }
+  return null;
 }
 
 function parseMaybeJson(value: unknown): unknown {
@@ -40,19 +54,21 @@ function first<T>(...values: (T | null | undefined)[]): T | null {
 function inferKind(name: string, attrs: Attrs): SpanKind {
   const explicit = str(attrs["breadcrumb.kind"]);
   if (explicit) return explicit as SpanKind;
-  const op = str(attrs["ai.operationId"]) ?? name;
+  const op = str(attrs["ai.operationId"]) ?? str(attrs["gen_ai.operation.name"]) ?? name;
   if (op.includes("toolCall") || op.startsWith("execute_tool")) return "tool";
   if (op.includes("embed") || op.startsWith("embeddings")) return "embedding";
+  if (op.startsWith("retrieval")) return "retrieval";
   if (
     op.includes("doGenerate") ||
     op.includes("doStream") ||
     op.startsWith("chat") ||
     op.startsWith("text_completion") ||
+    op.startsWith("generate_content") ||
     attrs["gen_ai.request.model"] !== undefined
   ) {
     return "llm";
   }
-  if (op.startsWith("invoke_agent")) return "agent";
+  if (op.startsWith("invoke_agent") || op.startsWith("create_agent")) return "agent";
   return "span";
 }
 
@@ -68,20 +84,18 @@ function collectMetadata(attrs: Attrs): Record<string, unknown> | null {
   return Object.keys(out).length > 0 ? out : null;
 }
 
-export function normalizeOtelSpan(span: ReadableSpan, environment: string): SpanRecord {
-  const attrs = span.attributes as Attrs;
-  const ctx = span.spanContext();
-  const parentSpanId =
-    (span as { parentSpanContext?: { spanId?: string } }).parentSpanContext?.spanId ??
-    (span as { parentSpanId?: string }).parentSpanId ??
-    null;
+export function normalizeSpanData(data: OtelSpanData, defaultEnvironment: string): SpanRecord {
+  const attrs = data.attributes;
+  const isError = data.error !== null;
 
-  const metadata = collectMetadata(attrs);
-  const isError = span.status.code === SpanStatusCode.ERROR;
+  const name = !data.parentSpanId
+    ? (str(attrs["ai.telemetry.functionId"]) ?? data.name)
+    : data.name;
 
-  const name = !parentSpanId
-    ? (str(attrs["ai.telemetry.functionId"]) ?? span.name)
-    : span.name;
+  const kind = inferKind(data.name, attrs);
+  // The AI SDK mirrors usage onto both the outer ai.generateText span and the
+  // inner doGenerate span — count it only once, on the actual LLM span.
+  const aiWrapperSpan = attrs["ai.operationId"] !== undefined && kind !== "llm";
 
   const input = first(
     parseMaybeJson(attrs["breadcrumb.input"]),
@@ -99,26 +113,23 @@ export function normalizeOtelSpan(span: ReadableSpan, environment: string): Span
     parseMaybeJson(attrs["gen_ai.output.messages"])
   );
 
-  const kind = inferKind(span.name, attrs);
-  // The AI SDK mirrors usage onto both the outer ai.generateText span and the
-  // inner doGenerate span — count it only once, on the actual LLM span.
-  const aiWrapperSpan = attrs["ai.operationId"] !== undefined && kind !== "llm";
-
   return {
-    id: ctx.spanId,
-    traceId: ctx.traceId,
-    parentSpanId,
+    id: data.spanId,
+    traceId: data.traceId,
+    parentSpanId: data.parentSpanId,
     name,
     kind,
-    environment,
+    environment: data.environment ?? defaultEnvironment,
     userId: first(
       str(attrs["breadcrumb.userId"]),
-      str(attrs["ai.telemetry.metadata.userId"])
+      str(attrs["ai.telemetry.metadata.userId"]),
+      str(attrs["user.id"])
     ),
     sessionId: first(
       str(attrs["breadcrumb.sessionId"]),
       str(attrs["ai.telemetry.metadata.sessionId"]),
-      str(attrs["gen_ai.conversation.id"])
+      str(attrs["gen_ai.conversation.id"]),
+      str(attrs["session.id"])
     ),
     model: first(
       str(attrs["breadcrumb.model"]),
@@ -149,11 +160,32 @@ export function normalizeOtelSpan(span: ReadableSpan, environment: string): Span
     ),
     cost: num(attrs["breadcrumb.cost"]),
     status: isError ? "error" : "ok",
-    error: isError ? (span.status.message ?? "error") : null,
+    error: isError ? (data.error || "error") : null,
     input: input ?? undefined,
     output: output ?? undefined,
-    metadata,
-    startTime: hrToMs(span.startTime),
-    endTime: hrToMs(span.endTime),
+    metadata: collectMetadata(attrs),
+    startTime: data.startMs,
+    endTime: data.endMs,
+  };
+}
+
+function hrToMs(time: [number, number]): number {
+  return time[0] * 1000 + Math.round(time[1] / 1e6);
+}
+
+export function fromReadableSpan(span: ReadableSpan): OtelSpanData {
+  const ctx = span.spanContext();
+  return {
+    traceId: ctx.traceId,
+    spanId: ctx.spanId,
+    parentSpanId:
+      (span as { parentSpanContext?: { spanId?: string } }).parentSpanContext?.spanId ??
+      (span as { parentSpanId?: string }).parentSpanId ??
+      null,
+    name: span.name,
+    attributes: span.attributes as Attrs,
+    startMs: hrToMs(span.startTime),
+    endMs: hrToMs(span.endTime),
+    error: span.status.code === SpanStatusCode.ERROR ? (span.status.message ?? "") : null,
   };
 }
