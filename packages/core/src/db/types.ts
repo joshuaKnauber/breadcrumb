@@ -53,6 +53,42 @@ export interface ListTracesOptions {
   environment?: string;
 }
 
+/**
+ * A session groups traces sharing a sessionId; traces without one stand
+ * alone (sessionKey = traceId), so every trace appears in the sessions view.
+ */
+export interface SessionSummary {
+  sessionKey: string;
+  sessionId: string | null;
+  userId: string | null;
+  environment: string;
+  startTime: number;
+  endTime: number | null;
+  runCount: number;
+  errorCount: number;
+  failName: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  cost: number | null;
+}
+
+/** One run = one trace, with its root span's payload for the feed. */
+export interface RunSummary {
+  traceId: string;
+  name: string;
+  input: unknown;
+  output: unknown;
+  startTime: number;
+  endTime: number | null;
+  spanCount: number;
+  errorCount: number;
+  failName: string | null;
+  failError: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  cost: number | null;
+}
+
 export interface MigrationResult {
   createdTables: string[];
   addedColumns: string[];
@@ -73,6 +109,8 @@ export interface DatabaseAdapter {
   migrate(): Promise<MigrationResult>;
   insertSpans(spans: SpanRecord[]): Promise<void>;
   listTraces(options: ListTracesOptions): Promise<TraceSummary[]>;
+  listSessions(options: ListTracesOptions): Promise<SessionSummary[]>;
+  listRuns(sessionKey: string): Promise<RunSummary[]>;
   getTraceSpans(traceId: string): Promise<SpanRecord[]>;
   /** Bounded delete of expired spans; returns rows deleted (may be < the backlog). */
   deleteExpiredSpans(rules: RetentionRule[], limit: number): Promise<number>;

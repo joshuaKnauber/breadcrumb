@@ -1,7 +1,7 @@
 import type { DatabaseAdapter, SpanRecord } from "./db/types.js";
 import { normalizeSpanData } from "./otel/normalize.js";
 import { parseOtlpJson } from "./otel/otlp.js";
-import { renderAppHtml } from "./ui.js";
+import { renderApp } from "./ui.js";
 
 export type AuthorizeFn = (
   request: Request
@@ -123,7 +123,7 @@ export function createHandler(ctx: RouterContext): (request: Request) => Promise
     }
     if (method === "GET") {
       if (path === "/") {
-        return new Response(renderAppHtml(basePath || "/"), {
+        return new Response(renderApp(basePath || "/"), {
           headers: { "content-type": "text/html; charset=utf-8" },
         });
       }
@@ -133,6 +133,19 @@ export function createHandler(ctx: RouterContext): (request: Request) => Promise
         const environment = url.searchParams.get("environment") ?? undefined;
         const traces = await ctx.adapter.listTraces({ limit, environment });
         return json({ traces });
+      }
+      if (path === "/api/sessions") {
+        await ctx.ready();
+        const limit = Number(url.searchParams.get("limit") ?? "") || undefined;
+        const environment = url.searchParams.get("environment") ?? undefined;
+        const sessions = await ctx.adapter.listSessions({ limit, environment });
+        return json({ sessions });
+      }
+      const runsMatch = path.match(/^\/api\/sessions\/([^/]+)\/runs$/);
+      if (runsMatch) {
+        await ctx.ready();
+        const runs = await ctx.adapter.listRuns(decodeURIComponent(runsMatch[1]!));
+        return json({ runs });
       }
       const traceMatch = path.match(/^\/api\/traces\/([^/]+)$/);
       if (traceMatch) {

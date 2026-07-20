@@ -53,13 +53,16 @@ const USERS = ["anna", "ben", "carla"];
 async function runPipeline(opts: { fail?: boolean } = {}): Promise<string> {
   const userId = USERS[Math.floor(Math.random() * USERS.length)]!;
 
+  const question = opts.fail ? "was kostet das hosting?" : "wie funktioniert breadcrumb?";
+
   return bc.trace(
     "support-reply",
     { userId, sessionId: `session-${userId}`, metadata: { channel: "playground" } },
     async (t) => {
+      t.set({ input: question });
       const docs = await t.span(
         "retrieve-docs",
-        { kind: "retrieval", input: { query: "wie funktioniert breadcrumb?" } },
+        { kind: "retrieval", input: { query: question } },
         async (s) => {
           await sleep(50 + Math.random() * 100);
           if (opts.fail) throw new Error("vector index unavailable");

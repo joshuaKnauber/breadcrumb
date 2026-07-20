@@ -1,7 +1,16 @@
 import { createRequire } from "node:module";
 import type { DatabaseAdapter, ListTracesOptions } from "../db/types.js";
 import { META_TABLE, SPANS_TABLE, spanColumns, spanIndexes, type ColumnSpec } from "../db/schema.js";
-import { rowToSpan, rowToTraceSummary, spanToRow, traceSummarySelect } from "../db/rows.js";
+import {
+  rowToRunSummary,
+  rowToSessionSummary,
+  rowToSpan,
+  rowToTraceSummary,
+  runSummarySelect,
+  sessionSummarySelect,
+  spanToRow,
+  traceSummarySelect,
+} from "../db/rows.js";
 
 const PG_TYPES = { text: "TEXT", integer: "BIGINT", real: "DOUBLE PRECISION", json: "JSONB" } as const;
 
@@ -126,6 +135,24 @@ export function postgres(connectionOrClient: string | PgQueryable): DatabaseAdap
       const sql = traceSummarySelect(SPANS_TABLE, envFilter) + ` LIMIT $${values.length}`;
       const { rows } = await db.query(sql, values);
       return rows.map(rowToTraceSummary);
+    },
+
+    async listSessions(options: ListTracesOptions) {
+      const values: unknown[] = [];
+      let envFilter = "";
+      if (options.environment) {
+        values.push(options.environment);
+        envFilter = `WHERE environment = $${values.length}`;
+      }
+      values.push(Math.min(options.limit ?? 50, 500));
+      const sql = sessionSummarySelect(SPANS_TABLE, envFilter) + ` LIMIT $${values.length}`;
+      const { rows } = await db.query(sql, values);
+      return rows.map(rowToSessionSummary);
+    },
+
+    async listRuns(sessionKey) {
+      const { rows } = await db.query(runSummarySelect(SPANS_TABLE, "$1", "::text"), [sessionKey]);
+      return rows.map(rowToRunSummary);
     },
 
     async getTraceSpans(traceId) {

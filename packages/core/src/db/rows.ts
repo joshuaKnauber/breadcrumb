@@ -1,4 +1,4 @@
-import type { SpanRecord, TraceSummary } from "./types.js";
+import type { RunSummary, SessionSummary, SpanRecord, TraceSummary } from "./types.js";
 
 /** Span -> DB row. JSON payloads are stringified (works for TEXT and JSONB). */
 export function spanToRow(span: SpanRecord): Record<string, unknown> {
@@ -84,6 +84,105 @@ export function rowToTraceSummary(row: Record<string, unknown>): TraceSummary {
     outputTokens: numValue(row.output_tokens) ?? 0,
     cost: numValue(row.cost),
   };
+}
+
+export function rowToSessionSummary(row: Record<string, unknown>): SessionSummary {
+  return {
+    sessionKey: row.session_key as string,
+    sessionId: (row.session_id as string | null) ?? null,
+    userId: (row.user_id as string | null) ?? null,
+    environment: row.environment as string,
+    startTime: numValue(row.start_time)!,
+    endTime: numValue(row.end_time),
+    runCount: numValue(row.run_count) ?? 0,
+    errorCount: numValue(row.error_count) ?? 0,
+    failName: (row.fail_name as string | null) ?? null,
+    inputTokens: numValue(row.input_tokens) ?? 0,
+    outputTokens: numValue(row.output_tokens) ?? 0,
+    cost: numValue(row.cost),
+  };
+}
+
+export function rowToRunSummary(row: Record<string, unknown>): RunSummary {
+  return {
+    traceId: row.trace_id as string,
+    name: row.name as string,
+    input: jsonValue(row.input) ?? undefined,
+    output: jsonValue(row.output) ?? undefined,
+    startTime: numValue(row.start_time)!,
+    endTime: numValue(row.end_time),
+    spanCount: numValue(row.span_count) ?? 0,
+    errorCount: numValue(row.error_count) ?? 0,
+    failName: (row.fail_name as string | null) ?? null,
+    failError: (row.fail_error as string | null) ?? null,
+    inputTokens: numValue(row.input_tokens) ?? 0,
+    outputTokens: numValue(row.output_tokens) ?? 0,
+    cost: numValue(row.cost),
+  };
+}
+
+/**
+ * Session aggregation. A trace's session is derived first (only the root span
+ * reliably carries session_id — AI SDK child spans don't), then traces group
+ * into sessions; sessionless traces stand alone keyed by trace_id.
+ */
+export function sessionSummarySelect(table: string, envFilter: string): string {
+  return `SELECT
+    COALESCE(t.session_id, t.trace_id) AS session_key,
+    MAX(t.session_id) AS session_id,
+    MAX(t.user_id) AS user_id,
+    MIN(t.environment) AS environment,
+    MIN(t.start_time) AS start_time,
+    MAX(t.end_time) AS end_time,
+    COUNT(*) AS run_count,
+    SUM(t.error_count) AS error_count,
+    MAX(t.fail_name) AS fail_name,
+    SUM(t.input_tokens) AS input_tokens,
+    SUM(t.output_tokens) AS output_tokens,
+    SUM(t.cost) AS cost
+  FROM (
+    SELECT trace_id,
+      MAX(session_id) AS session_id,
+      MAX(user_id) AS user_id,
+      MIN(environment) AS environment,
+      MIN(start_time) AS start_time,
+      MAX(COALESCE(end_time, start_time)) AS end_time,
+      SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS error_count,
+      MAX(CASE WHEN status = 'error' THEN name END) AS fail_name,
+      SUM(COALESCE(input_tokens, 0)) AS input_tokens,
+      SUM(COALESCE(output_tokens, 0)) AS output_tokens,
+      SUM(cost) AS cost
+    FROM ${table}
+    ${envFilter}
+    GROUP BY trace_id
+  ) t
+  GROUP BY COALESCE(t.session_id, t.trace_id)
+  ORDER BY MAX(t.start_time) DESC`;
+}
+
+export function runSummarySelect(table: string, keyFilter: string, castText: string): string {
+  return `SELECT
+    trace_id,
+    COALESCE(MAX(CASE WHEN parent_span_id IS NULL THEN name END), MIN(name)) AS name,
+    MAX(CASE WHEN parent_span_id IS NULL THEN input${castText} END) AS input,
+    MAX(CASE WHEN parent_span_id IS NULL THEN output${castText} END) AS output,
+    MIN(start_time) AS start_time,
+    MAX(end_time) AS end_time,
+    COUNT(*) AS span_count,
+    SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS error_count,
+    MAX(CASE WHEN status = 'error' THEN name END) AS fail_name,
+    MAX(CASE WHEN status = 'error' THEN error END) AS fail_error,
+    SUM(COALESCE(input_tokens, 0)) AS input_tokens,
+    SUM(COALESCE(output_tokens, 0)) AS output_tokens,
+    SUM(cost) AS cost
+  FROM ${table}
+  WHERE trace_id IN (
+    SELECT trace_id FROM ${table}
+    GROUP BY trace_id
+    HAVING COALESCE(MAX(session_id), trace_id) = ${keyFilter}
+  )
+  GROUP BY trace_id
+  ORDER BY MIN(start_time) ASC`;
 }
 
 /** Shared aggregation SQL; adapters supply placeholder syntax + LIMIT/filter. */

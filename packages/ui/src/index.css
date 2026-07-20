@@ -1,0 +1,46 @@
+@import "tailwindcss";
+@import "@fontsource/instrument-sans/latin-400.css";
+@import "@fontsource/instrument-sans/latin-500.css";
+@import "@fontsource/instrument-sans/latin-600.css";
+@import "@fontsource/geist-mono/latin-400.css";
+@import "@fontsource/geist-mono/latin-500.css";
+
+@theme {
+  --color-bg: #17191d;
+  --color-panel: #1d2025;
+  --color-panel2: #23272d;
+  --color-line: #2e333a;
+  --color-fg: #e9ebee;
+  --color-muted: #9aa2ad;
+  --color-faint: #6b7380;
+  --color-accent: #e8a33d;
+  --color-err: #e5645a;
+  --color-ok: #5bb98b;
+  --color-blue: #6fb3e0;
+  --color-purple: #b790e8;
+  --font-sans: "Instrument Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  @apply bg-bg text-fg font-sans text-sm antialiased;
+  color-scheme: dark;
+}
+
+button {
+  cursor: pointer;
+  text-align: left;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--color-line); border-radius: 5px; border: 2px solid var(--color-bg); }
+::-webkit-scrollbar-track { background: transparent; }

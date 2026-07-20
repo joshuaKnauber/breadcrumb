@@ -1,9 +1,18 @@
+import { APP_HTML } from "./ui/app-html.gen.js";
+
 /**
- * Placeholder UI until the real SPA package exists. Server-rendered shell with
- * <base href> (the Bull Board pattern): all asset/API URLs resolve relative to
- * the mount point, so the same page works at any basePath and in `dev`.
+ * Serves the built SPA (a self-contained HTML string baked in at build time —
+ * no files read from node_modules, bundler-safe) with an injected <base href>,
+ * so assets/API/router all resolve relative to the mount point.
+ * Falls back to a minimal placeholder if the UI hasn't been built.
  */
-export function renderAppHtml(basePath: string): string {
+export function renderApp(basePath: string): string {
+  const base = `<base href="${basePath.endsWith("/") ? basePath : basePath + "/"}" />`;
+  if (APP_HTML) return APP_HTML.replace(/<head>/i, `<head>${base}`);
+  return renderAppHtml(basePath);
+}
+
+function renderAppHtml(basePath: string): string {
   const base = basePath.endsWith("/") ? basePath : basePath + "/";
   return `<!doctype html>
 <html lang="en">

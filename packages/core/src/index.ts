@@ -1,4 +1,11 @@
-import type { DatabaseAdapter, ListTracesOptions, SpanRecord, TraceSummary } from "./db/types.js";
+import type {
+  DatabaseAdapter,
+  ListTracesOptions,
+  RunSummary,
+  SessionSummary,
+  SpanRecord,
+  TraceSummary,
+} from "./db/types.js";
 import {
   createTelemetryPipeline,
   type TelemetryOptions,
@@ -45,6 +52,8 @@ export interface Breadcrumb {
   /** Programmatic queries + ingest, callable server-side without HTTP. */
   api: {
     listTraces(options?: ListTracesOptions): Promise<TraceSummary[]>;
+    listSessions(options?: ListTracesOptions): Promise<SessionSummary[]>;
+    listRuns(options: { sessionKey: string }): Promise<RunSummary[]>;
     getTrace(options: { id: string }): Promise<SpanRecord[]>;
     ingestSpans(options: { spans: SpanRecord[] }): Promise<void>;
     /** One bounded retention batch (for cron/manual sweeping); returns rows deleted. */
@@ -72,6 +81,14 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
     async listTraces(opts = {}) {
       await ready();
       return adapter.listTraces(opts);
+    },
+    async listSessions(opts = {}) {
+      await ready();
+      return adapter.listSessions(opts);
+    },
+    async listRuns({ sessionKey }) {
+      await ready();
+      return adapter.listRuns(sessionKey);
     },
     async getTrace({ id }) {
       await ready();
@@ -116,6 +133,8 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
 export type {
   DatabaseAdapter,
   ListTracesOptions,
+  RunSummary,
+  SessionSummary,
   SpanRecord,
   TraceSummary,
   SpanKind,

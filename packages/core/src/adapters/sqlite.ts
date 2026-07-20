@@ -2,7 +2,16 @@ import { createRequire } from "node:module";
 import type DatabaseType from "better-sqlite3";
 import type { DatabaseAdapter, ListTracesOptions } from "../db/types.js";
 import { META_TABLE, SPANS_TABLE, spanColumns, spanIndexes, type ColumnSpec } from "../db/schema.js";
-import { rowToSpan, rowToTraceSummary, spanToRow, traceSummarySelect } from "../db/rows.js";
+import {
+  rowToRunSummary,
+  rowToSessionSummary,
+  rowToSpan,
+  rowToTraceSummary,
+  runSummarySelect,
+  sessionSummarySelect,
+  spanToRow,
+  traceSummarySelect,
+} from "../db/rows.js";
 
 const SQLITE_TYPES = { text: "TEXT", integer: "INTEGER", real: "REAL", json: "TEXT" } as const;
 
@@ -119,6 +128,24 @@ export function sqlite(fileOrDb: string | DatabaseType.Database): DatabaseAdapte
         .prepare(sql)
         .all({ limit, ...(options.environment ? { environment: options.environment } : {}) }) as Record<string, unknown>[];
       return rows.map(rowToTraceSummary);
+    },
+
+    async listSessions(options: ListTracesOptions) {
+      const limit = Math.min(options.limit ?? 50, 500);
+      const sql =
+        sessionSummarySelect(SPANS_TABLE, options.environment ? "WHERE environment = @environment" : "") +
+        " LIMIT @limit";
+      const rows = db
+        .prepare(sql)
+        .all({ limit, ...(options.environment ? { environment: options.environment } : {}) }) as Record<string, unknown>[];
+      return rows.map(rowToSessionSummary);
+    },
+
+    async listRuns(sessionKey) {
+      const rows = db
+        .prepare(runSummarySelect(SPANS_TABLE, "?", ""))
+        .all(sessionKey) as Record<string, unknown>[];
+      return rows.map(rowToRunSummary);
     },
 
     async getTraceSpans(traceId) {
