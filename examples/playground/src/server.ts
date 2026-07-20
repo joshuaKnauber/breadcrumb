@@ -29,8 +29,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // Offline mock model so the playground needs no API key.
 const model: LanguageModelV2 = {
   specificationVersion: "v2",
-  provider: "mock",
-  modelId: "mock-gpt",
+  provider: "openai",
+  modelId: "gpt-5",
   supportedUrls: {},
   async doGenerate() {
     await sleep(150 + Math.random() * 400);

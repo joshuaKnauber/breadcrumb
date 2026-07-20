@@ -3,12 +3,15 @@ import type DatabaseType from "better-sqlite3";
 import type { DatabaseAdapter, ListTracesOptions } from "../db/types.js";
 import { META_TABLE, SPANS_TABLE, spanColumns, spanIndexes, type ColumnSpec } from "../db/schema.js";
 import {
+  costByDaySelect,
+  costByFunctionSelect,
   rowToRunSummary,
   rowToSessionSummary,
   rowToSpan,
   rowToTraceSummary,
   runSummarySelect,
   sessionSummarySelect,
+  shapeCostSummary,
   spanToRow,
   traceSummarySelect,
 } from "../db/rows.js";
@@ -146,6 +149,21 @@ export function sqlite(fileOrDb: string | DatabaseType.Database): DatabaseAdapte
         .prepare(runSummarySelect(SPANS_TABLE, "?", ""))
         .all(sessionKey) as Record<string, unknown>[];
       return rows.map(rowToRunSummary);
+    },
+
+    async costSummary(options) {
+      const days = Math.min(Math.max(options.days ?? 14, 1), 90);
+      const cutoff = Date.now() - days * 86_400_000;
+      const params = { cutoff, ...(options.environment ? { environment: options.environment } : {}) };
+      const envFilter = options.environment ? "AND environment = @environment" : "";
+      const dayExpr = "strftime('%Y-%m-%d', start_time / 1000, 'unixepoch')";
+      const dayRows = db
+        .prepare(costByDaySelect(SPANS_TABLE, dayExpr, `AND start_time >= @cutoff ${envFilter}`))
+        .all(params) as Record<string, unknown>[];
+      const funcRows = db
+        .prepare(costByFunctionSelect(SPANS_TABLE, `AND start_time >= @cutoff ${envFilter}`))
+        .all(params) as Record<string, unknown>[];
+      return shapeCostSummary(days, dayRows, funcRows);
     },
 
     async getTraceSpans(traceId) {

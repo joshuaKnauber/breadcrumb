@@ -34,6 +34,31 @@ export interface RunSummary {
   cost: number | null;
 }
 
+export interface CostDatum {
+  day: string;
+  model: string | null;
+  cost: number;
+  inputTokens: number;
+  outputTokens: number;
+  count: number;
+}
+
+export interface CostGroup {
+  key: string | null;
+  cost: number;
+  inputTokens: number;
+  outputTokens: number;
+  count: number;
+}
+
+export interface CostSummary {
+  windowDays: number;
+  totals: { cost: number; inputTokens: number; outputTokens: number };
+  days: CostDatum[];
+  byModel: CostGroup[];
+  byFunction: CostGroup[];
+}
+
 export interface SpanRecord {
   id: string;
   traceId: string;

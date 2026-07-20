@@ -2,12 +2,15 @@ import { createRequire } from "node:module";
 import type { DatabaseAdapter, ListTracesOptions } from "../db/types.js";
 import { META_TABLE, SPANS_TABLE, spanColumns, spanIndexes, type ColumnSpec } from "../db/schema.js";
 import {
+  costByDaySelect,
+  costByFunctionSelect,
   rowToRunSummary,
   rowToSessionSummary,
   rowToSpan,
   rowToTraceSummary,
   runSummarySelect,
   sessionSummarySelect,
+  shapeCostSummary,
   spanToRow,
   traceSummarySelect,
 } from "../db/rows.js";
@@ -153,6 +156,21 @@ export function postgres(connectionOrClient: string | PgQueryable): DatabaseAdap
     async listRuns(sessionKey) {
       const { rows } = await db.query(runSummarySelect(SPANS_TABLE, "$1", "::text"), [sessionKey]);
       return rows.map(rowToRunSummary);
+    },
+
+    async costSummary(options) {
+      const days = Math.min(Math.max(options.days ?? 14, 1), 90);
+      const cutoff = Date.now() - days * 86_400_000;
+      const values: unknown[] = [cutoff];
+      let filter = "AND start_time >= $1";
+      if (options.environment) {
+        values.push(options.environment);
+        filter += ` AND environment = $2`;
+      }
+      const dayExpr = "to_char(to_timestamp(start_time / 1000.0) AT TIME ZONE 'UTC', 'YYYY-MM-DD')";
+      const dayRows = (await db.query(costByDaySelect(SPANS_TABLE, dayExpr, filter), values)).rows;
+      const funcRows = (await db.query(costByFunctionSelect(SPANS_TABLE, filter), values)).rows;
+      return shapeCostSummary(days, dayRows, funcRows);
     },
 
     async getTraceSpans(traceId) {

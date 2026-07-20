@@ -15,6 +15,8 @@ export interface RouterContext {
   authorize?: AuthorizeFn;
   adapter: DatabaseAdapter;
   ready: () => Promise<void>;
+  /** Single write funnel (applies pricing, sweeps). Used by all ingest routes. */
+  ingest: (spans: SpanRecord[]) => Promise<void>;
 }
 
 const INGEST_KEY_HEADER = "x-breadcrumb-key";
@@ -99,16 +101,14 @@ export function createHandler(ctx: RouterContext): (request: Request) => Promise
         const spans = body.spans
           .map((s: unknown) => normalizeIngestedSpan(s, ctx.environment))
           .filter((s: SpanRecord | null): s is SpanRecord => s !== null);
-        await ctx.ready();
-        await ctx.adapter.insertSpans(spans);
+        await ctx.ingest(spans);
         return json({ ingested: spans.length });
       }
 
       // OTLP/HTTP JSON (standard exporters: OTEL_EXPORTER_OTLP_ENDPOINT + headers)
       if (path === "/api/ingest/otel" || path === "/api/ingest/otel/v1/traces") {
         const spans = parseOtlpJson(body).map((s) => normalizeSpanData(s, ctx.environment));
-        await ctx.ready();
-        await ctx.adapter.insertSpans(spans);
+        await ctx.ingest(spans);
         return json({ partialSuccess: {} });
       }
 
@@ -122,11 +122,6 @@ export function createHandler(ctx: RouterContext): (request: Request) => Promise
       if (verdict !== true) return json({ error: "unauthorized" }, 401);
     }
     if (method === "GET") {
-      if (path === "/") {
-        return new Response(renderApp(basePath || "/"), {
-          headers: { "content-type": "text/html; charset=utf-8" },
-        });
-      }
       if (path === "/api/traces") {
         await ctx.ready();
         const limit = Number(url.searchParams.get("limit") ?? "") || undefined;
@@ -147,12 +142,26 @@ export function createHandler(ctx: RouterContext): (request: Request) => Promise
         const runs = await ctx.adapter.listRuns(decodeURIComponent(runsMatch[1]!));
         return json({ runs });
       }
+      if (path === "/api/cost") {
+        await ctx.ready();
+        const days = Number(url.searchParams.get("days") ?? "") || undefined;
+        const environment = url.searchParams.get("environment") ?? undefined;
+        const cost = await ctx.adapter.costSummary({ days, environment });
+        return json(cost);
+      }
       const traceMatch = path.match(/^\/api\/traces\/([^/]+)$/);
       if (traceMatch) {
         await ctx.ready();
         const spans = await ctx.adapter.getTraceSpans(decodeURIComponent(traceMatch[1]!));
         if (spans.length === 0) return json({ error: "not found" }, 404);
         return json({ spans });
+      }
+      // SPA fallback: any non-API GET serves the app, so client-side routes
+      // (/cost, /failures) survive a hard refresh / deep link.
+      if (!path.startsWith("/api/")) {
+        return new Response(renderApp(basePath || "/"), {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        });
       }
     }
 

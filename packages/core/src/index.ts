@@ -1,4 +1,6 @@
 import type {
+  CostQueryOptions,
+  CostSummary,
   DatabaseAdapter,
   ListTracesOptions,
   RunSummary,
@@ -11,6 +13,7 @@ import {
   type TelemetryOptions,
   type TelemetrySettings,
 } from "./otel/pipeline.js";
+import { applyPricing, resolvePricing, type Pricing } from "./pricing.js";
 import { createSweeper, type RetentionOptions } from "./retention.js";
 import { createHandler, type AuthorizeFn } from "./router.js";
 import { createTraceFn, type TraceFn } from "./trace.js";
@@ -38,6 +41,12 @@ export interface BreadcrumbOptions {
    * Alternative to wrapping the mount in middleware.
    */
   authorize?: AuthorizeFn;
+  /**
+   * Model pricing (USD per 1M tokens) for cost inference when a span has
+   * tokens + model but no explicit cost. Merges over a small built-in table.
+   * Pass `false` to disable inference entirely. Prices are estimates.
+   */
+  pricing?: Pricing;
 }
 
 export interface Breadcrumb {
@@ -55,6 +64,7 @@ export interface Breadcrumb {
     listSessions(options?: ListTracesOptions): Promise<SessionSummary[]>;
     listRuns(options: { sessionKey: string }): Promise<RunSummary[]>;
     getTrace(options: { id: string }): Promise<SpanRecord[]>;
+    costSummary(options?: CostQueryOptions): Promise<CostSummary>;
     ingestSpans(options: { spans: SpanRecord[] }): Promise<void>;
     /** One bounded retention batch (for cron/manual sweeping); returns rows deleted. */
     runRetention(): Promise<number>;
@@ -70,6 +80,7 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
     "development";
   const basePath = options.basePath ?? "/breadcrumb";
   const adapter = options.database;
+  const pricing = resolvePricing(options.pricing);
 
   // Lazy one-time migrate before the first DB operation.
   let readyPromise: Promise<void> | null = null;
@@ -94,8 +105,13 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
       await ready();
       return adapter.getTraceSpans(id);
     },
+    async costSummary(opts = {}) {
+      await ready();
+      return adapter.costSummary(opts);
+    },
     async ingestSpans({ spans }) {
       await ready();
+      for (const span of spans) applyPricing(span, pricing);
       await adapter.insertSpans(spans);
       await sweeper.maybeSweep();
     },
@@ -118,6 +134,7 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
     authorize: options.authorize,
     adapter,
     ready,
+    ingest: (spans) => api.ingestSpans({ spans }),
   });
 
   return {
@@ -131,6 +148,10 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
 }
 
 export type {
+  CostQueryOptions,
+  CostSummary,
+  CostDatum,
+  CostGroup,
   DatabaseAdapter,
   ListTracesOptions,
   RunSummary,
@@ -140,6 +161,8 @@ export type {
   SpanKind,
   SpanStatus,
 } from "./db/types.js";
+export type { Pricing, PricingTable, ModelPrice } from "./pricing.js";
+export { DEFAULT_PRICING } from "./pricing.js";
 export type { SpanAttrs, SpanContext, TraceAttrs, TraceFn } from "./trace.js";
 export type { TelemetryOptions, TelemetrySettings } from "./otel/pipeline.js";
 export type { RetentionOptions } from "./retention.js";

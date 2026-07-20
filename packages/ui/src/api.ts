@@ -1,4 +1,4 @@
-import type { RunSummary, SessionSummary, SpanRecord } from "./types.js";
+import type { CostSummary, RunSummary, SessionSummary, SpanRecord } from "./types.js";
 
 // Relative URLs resolve against the injected <base href>, so the same build
 // works at any mount path and in `breadcrumb dev`.
@@ -19,6 +19,11 @@ export const api = {
     ),
   trace: (traceId: string) =>
     get<{ spans: SpanRecord[] }>(`api/traces/${encodeURIComponent(traceId)}`).then((r) => r.spans),
+  cost: (days: number, environment?: string) => {
+    const q = new URLSearchParams({ days: String(days) });
+    if (environment) q.set("environment", environment);
+    return get<CostSummary>(`api/cost?${q.toString()}`);
+  },
 };
 
 export const fmtMs = (ms: number | null | undefined): string => {
@@ -34,6 +39,14 @@ export const fmtTokens = (input: number, output: number): string => {
 
 export const fmtCost = (cost: number | null): string =>
   cost == null ? "–" : `$${cost.toFixed(4)}`;
+
+/** Compact money: 2 decimals at/above $1, 4 below, for tiles and totals. */
+export const fmtMoney = (n: number | null): string => {
+  if (n == null) return "$0";
+  return n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(4)}`;
+};
+
+export const fmtInt = (n: number): string => n.toLocaleString();
 
 export const fmtTime = (ms: number): string =>
   new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });

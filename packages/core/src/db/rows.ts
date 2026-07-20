@@ -1,4 +1,12 @@
-import type { RunSummary, SessionSummary, SpanRecord, TraceSummary } from "./types.js";
+import type {
+  CostDatum,
+  CostGroup,
+  CostSummary,
+  RunSummary,
+  SessionSummary,
+  SpanRecord,
+  TraceSummary,
+} from "./types.js";
 
 /** Span -> DB row. JSON payloads are stringified (works for TEXT and JSONB). */
 export function spanToRow(span: SpanRecord): Record<string, unknown> {
@@ -183,6 +191,92 @@ export function runSummarySelect(table: string, keyFilter: string, castText: str
   )
   GROUP BY trace_id
   ORDER BY MIN(start_time) ASC`;
+}
+
+/**
+ * Cost time series bucketed by day + model. `dayExpr` is the dialect-specific
+ * expression turning start_time (epoch ms) into a UTC 'YYYY-MM-DD' string;
+ * `filter` carries the cutoff/environment predicates (leading AND).
+ */
+export function costByDaySelect(table: string, dayExpr: string, filter: string): string {
+  return `SELECT ${dayExpr} AS day, model,
+    SUM(cost) AS cost,
+    SUM(COALESCE(input_tokens, 0)) AS input_tokens,
+    SUM(COALESCE(output_tokens, 0)) AS output_tokens,
+    COUNT(*) AS count
+  FROM ${table}
+  WHERE cost IS NOT NULL ${filter}
+  GROUP BY day, model
+  ORDER BY day ASC`;
+}
+
+/** Cost attributed to each run's root-span name (the "function"). */
+export function costByFunctionSelect(table: string, filter: string): string {
+  return `SELECT root_name AS key,
+    SUM(cost) AS cost,
+    SUM(input_tokens) AS input_tokens,
+    SUM(output_tokens) AS output_tokens,
+    COUNT(*) AS count
+  FROM (
+    SELECT trace_id,
+      MAX(CASE WHEN parent_span_id IS NULL THEN name END) AS root_name,
+      SUM(COALESCE(cost, 0)) AS cost,
+      SUM(COALESCE(input_tokens, 0)) AS input_tokens,
+      SUM(COALESCE(output_tokens, 0)) AS output_tokens
+    FROM ${table}
+    WHERE 1 = 1 ${filter}
+    GROUP BY trace_id
+  ) t
+  GROUP BY root_name
+  ORDER BY cost DESC`;
+}
+
+export function shapeCostSummary(
+  windowDays: number,
+  dayRows: Record<string, unknown>[],
+  funcRows: Record<string, unknown>[]
+): CostSummary {
+  const days: CostDatum[] = dayRows.map((r) => ({
+    day: r.day as string,
+    model: (r.model as string | null) ?? null,
+    cost: numValue(r.cost) ?? 0,
+    inputTokens: numValue(r.input_tokens) ?? 0,
+    outputTokens: numValue(r.output_tokens) ?? 0,
+    count: numValue(r.count) ?? 0,
+  }));
+
+  const totals = days.reduce(
+    (a, d) => ({
+      cost: a.cost + d.cost,
+      inputTokens: a.inputTokens + d.inputTokens,
+      outputTokens: a.outputTokens + d.outputTokens,
+    }),
+    { cost: 0, inputTokens: 0, outputTokens: 0 }
+  );
+
+  const modelMap = new Map<string | null, CostGroup>();
+  for (const d of days) {
+    const g = modelMap.get(d.model) ?? { key: d.model, cost: 0, inputTokens: 0, outputTokens: 0, count: 0 };
+    g.cost += d.cost;
+    g.inputTokens += d.inputTokens;
+    g.outputTokens += d.outputTokens;
+    g.count += d.count;
+    modelMap.set(d.model, g);
+  }
+  const byModel = [...modelMap.values()].sort((a, b) => b.cost - a.cost);
+
+  const byFunction: CostGroup[] = funcRows
+    .map((r) => ({
+      key: (r.key as string | null) ?? null,
+      cost: numValue(r.cost) ?? 0,
+      inputTokens: numValue(r.input_tokens) ?? 0,
+      outputTokens: numValue(r.output_tokens) ?? 0,
+      count: numValue(r.count) ?? 0,
+    }))
+    .filter((g) => g.cost > 0)
+    .sort((a, b) => b.cost - a.cost);
+
+  return { windowDays, totals, days, byModel, byFunction };
 }
 
 /** Shared aggregation SQL; adapters supply placeholder syntax + LIMIT/filter. */

@@ -103,6 +103,38 @@ export interface RetentionRule {
   before: number;
 }
 
+export interface CostQueryOptions {
+  environment?: string;
+  /** Trailing window in days (default 14, max 90). */
+  days?: number;
+}
+
+/** One day+model cost bucket, for the stacked time series. */
+export interface CostDatum {
+  day: string;
+  model: string | null;
+  cost: number;
+  inputTokens: number;
+  outputTokens: number;
+  count: number;
+}
+
+export interface CostGroup {
+  key: string | null;
+  cost: number;
+  inputTokens: number;
+  outputTokens: number;
+  count: number;
+}
+
+export interface CostSummary {
+  windowDays: number;
+  totals: { cost: number; inputTokens: number; outputTokens: number };
+  days: CostDatum[];
+  byModel: CostGroup[];
+  byFunction: CostGroup[];
+}
+
 export interface DatabaseAdapter {
   id: string;
   /** Create/upgrade breadcrumb's tables. Additive-only; safe to call repeatedly. */
@@ -111,6 +143,7 @@ export interface DatabaseAdapter {
   listTraces(options: ListTracesOptions): Promise<TraceSummary[]>;
   listSessions(options: ListTracesOptions): Promise<SessionSummary[]>;
   listRuns(sessionKey: string): Promise<RunSummary[]>;
+  costSummary(options: CostQueryOptions): Promise<CostSummary>;
   getTraceSpans(traceId: string): Promise<SpanRecord[]>;
   /** Bounded delete of expired spans; returns rows deleted (may be < the backlog). */
   deleteExpiredSpans(rules: RetentionRule[], limit: number): Promise<number>;
