@@ -6,13 +6,13 @@
 @import "@fontsource/geist-mono/latin-500.css";
 
 @theme {
-  --color-bg: #17191d;
-  --color-panel: #1d2025;
-  --color-panel2: #23272d;
-  --color-line: #2e333a;
-  --color-fg: #e9ebee;
-  --color-muted: #9aa2ad;
-  --color-faint: #6b7380;
+  --color-bg: #1a1917;
+  --color-panel: #211f1d;
+  --color-panel2: #2a2825;
+  --color-line: #38352f;
+  --color-fg: #ecebe8;
+  --color-muted: #a4a09a;
+  --color-faint: #726e67;
   --color-accent: #e8a33d;
   --color-err: #e5645a;
   --color-ok: #5bb98b;

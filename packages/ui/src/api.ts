@@ -24,6 +24,8 @@ export const api = {
     if (environment) q.set("environment", environment);
     return get<CostSummary>(`api/cost?${q.toString()}`);
   },
+  environments: () =>
+    get<{ environments: string[] }>("api/environments").then((r) => r.environments),
 };
 
 export const fmtMs = (ms: number | null | undefined): string => {

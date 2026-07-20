@@ -151,6 +151,13 @@ export function sqlite(fileOrDb: string | DatabaseType.Database): DatabaseAdapte
       return rows.map(rowToRunSummary);
     },
 
+    async listEnvironments() {
+      const rows = db
+        .prepare(`SELECT DISTINCT environment FROM ${SPANS_TABLE} ORDER BY environment ASC`)
+        .all() as { environment: string }[];
+      return rows.map((r) => r.environment);
+    },
+
     async costSummary(options) {
       const days = Math.min(Math.max(options.days ?? 14, 1), 90);
       const cutoff = Date.now() - days * 86_400_000;

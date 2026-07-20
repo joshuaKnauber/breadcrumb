@@ -64,6 +64,7 @@ export interface Breadcrumb {
     listSessions(options?: ListTracesOptions): Promise<SessionSummary[]>;
     listRuns(options: { sessionKey: string }): Promise<RunSummary[]>;
     getTrace(options: { id: string }): Promise<SpanRecord[]>;
+    listEnvironments(): Promise<string[]>;
     costSummary(options?: CostQueryOptions): Promise<CostSummary>;
     ingestSpans(options: { spans: SpanRecord[] }): Promise<void>;
     /** One bounded retention batch (for cron/manual sweeping); returns rows deleted. */
@@ -104,6 +105,10 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
     async getTrace({ id }) {
       await ready();
       return adapter.getTraceSpans(id);
+    },
+    async listEnvironments() {
+      await ready();
+      return adapter.listEnvironments();
     },
     async costSummary(opts = {}) {
       await ready();

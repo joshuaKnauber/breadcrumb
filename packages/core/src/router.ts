@@ -142,6 +142,11 @@ export function createHandler(ctx: RouterContext): (request: Request) => Promise
         const runs = await ctx.adapter.listRuns(decodeURIComponent(runsMatch[1]!));
         return json({ runs });
       }
+      if (path === "/api/environments") {
+        await ctx.ready();
+        const environments = await ctx.adapter.listEnvironments();
+        return json({ environments });
+      }
       if (path === "/api/cost") {
         await ctx.ready();
         const days = Number(url.searchParams.get("days") ?? "") || undefined;

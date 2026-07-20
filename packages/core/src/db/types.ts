@@ -143,6 +143,7 @@ export interface DatabaseAdapter {
   listTraces(options: ListTracesOptions): Promise<TraceSummary[]>;
   listSessions(options: ListTracesOptions): Promise<SessionSummary[]>;
   listRuns(sessionKey: string): Promise<RunSummary[]>;
+  listEnvironments(): Promise<string[]>;
   costSummary(options: CostQueryOptions): Promise<CostSummary>;
   getTraceSpans(traceId: string): Promise<SpanRecord[]>;
   /** Bounded delete of expired spans; returns rows deleted (may be < the backlog). */

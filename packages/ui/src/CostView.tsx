@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Bar } from "react-chartjs-2";
+import type { ChartData, ChartOptions } from "chart.js";
+import "./chart.js";
 import { api, fmtInt, fmtMoney } from "./api.js";
 import type { CostGroup, CostSummary } from "./types.js";
 
@@ -98,62 +101,71 @@ function CostChart({
   summary: CostSummary;
   colorForModel: (key: string | null) => string;
 }) {
-  const modelOrder = summary.byModel.map((m) => m.key);
   const range = utcDayRange(summary.windowDays);
 
-  // day -> model -> cost
-  const byDay = new Map<string, Map<string | null, number>>();
-  for (const d of summary.days) {
-    const m = byDay.get(d.day) ?? new Map();
-    m.set(d.model, (m.get(d.model) ?? 0) + d.cost);
-    byDay.set(d.day, m);
-  }
-  const dayTotal = (day: string) =>
-    [...(byDay.get(day)?.values() ?? [])].reduce((a, c) => a + c, 0);
-  const max = Math.max(...range.map(dayTotal), 0.0001);
+  const { data, options } = useMemo(() => {
+    // day -> model -> cost
+    const byDay = new Map<string, Map<string | null, number>>();
+    for (const d of summary.days) {
+      const m = byDay.get(d.day) ?? new Map();
+      m.set(d.model, (m.get(d.model) ?? 0) + d.cost);
+      byDay.set(d.day, m);
+    }
+
+    const chartData: ChartData<"bar"> = {
+      labels: range.map((day) => day.slice(5)),
+      datasets: summary.byModel.map((m) => ({
+        label: m.key ?? "unknown",
+        data: range.map((day) => byDay.get(day)?.get(m.key) ?? 0),
+        backgroundColor: colorForModel(m.key),
+        stack: "cost",
+        borderRadius: 2,
+        maxBarThickness: 26,
+      })),
+    };
+
+    const chartOptions: ChartOptions<"bar"> = {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#211f1d",
+          borderColor: "#38352f",
+          borderWidth: 1,
+          padding: 10,
+          titleColor: "#ecebe8",
+          bodyColor: "#a4a09a",
+          callbacks: {
+            label: (ctx) => `${ctx.dataset.label}: ${fmtMoney(ctx.parsed.y)}`,
+          },
+          filter: (item) => (item.parsed.y ?? 0) > 0,
+        },
+      },
+      scales: {
+        x: {
+          stacked: true,
+          grid: { display: false },
+          ticks: { maxRotation: 0, autoSkipPadding: 16 },
+          border: { color: "#38352f" },
+        },
+        y: {
+          stacked: true,
+          grid: { color: "#38352f80" },
+          border: { display: false },
+          ticks: { callback: (v) => fmtMoney(Number(v)) },
+        },
+      },
+    };
+
+    return { data: chartData, options: chartOptions };
+  }, [summary, colorForModel, range]);
 
   return (
     <div className="mb-3 rounded-lg border border-line bg-panel p-4">
-      <div className="flex gap-2">
-        <div className="relative h-48 w-12 flex-none font-mono text-[10px] text-faint tabular-nums">
-          <span className="absolute top-0 right-1">{fmtMoney(max)}</span>
-          <span className="absolute top-1/2 right-1 -translate-y-1/2">{fmtMoney(max / 2)}</span>
-          <span className="absolute right-1 bottom-0">$0</span>
-        </div>
-        <div className="relative h-48 flex-1">
-          <div className="absolute inset-0 flex flex-col justify-between">
-            <div className="border-t border-line/50" />
-            <div className="border-t border-line/50" />
-            <div className="border-t border-line" />
-          </div>
-          <div className="absolute inset-0 flex items-end gap-px">
-            {range.map((day) => {
-              const total = dayTotal(day);
-              const models = byDay.get(day);
-              return (
-                <div key={day} className="flex h-full flex-1 flex-col justify-end">
-                  <div className="flex flex-col-reverse" style={{ height: `${(total / max) * 100}%` }}>
-                    {modelOrder.map((mk) => {
-                      const c = models?.get(mk) ?? 0;
-                      if (c === 0) return null;
-                      return (
-                        <div
-                          key={String(mk)}
-                          title={`${day} · ${mk ?? "unknown"}: ${fmtMoney(c)}`}
-                          style={{ height: `${(c / total) * 100}%`, background: colorForModel(mk) }}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-      <div className="mt-1.5 flex justify-between pl-14 font-mono text-[10px] text-faint">
-        <span>{range[0]?.slice(5)}</span>
-        <span>{range[range.length - 1]?.slice(5)}</span>
+      <div className="h-52">
+        <Bar data={data} options={options} />
       </div>
     </div>
   );

@@ -158,6 +158,13 @@ export function postgres(connectionOrClient: string | PgQueryable): DatabaseAdap
       return rows.map(rowToRunSummary);
     },
 
+    async listEnvironments() {
+      const { rows } = await db.query(
+        `SELECT DISTINCT environment FROM ${SPANS_TABLE} ORDER BY environment ASC`
+      );
+      return rows.map((r) => r.environment as string);
+    },
+
     async costSummary(options) {
       const days = Math.min(Math.max(options.days ?? 14, 1), 90);
       const cutoff = Date.now() - days * 86_400_000;

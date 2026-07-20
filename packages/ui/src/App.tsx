@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "./api.js";
 import { SessionsView } from "./SessionsView.js";
 import { CostView } from "./CostView.js";
 
@@ -12,6 +14,13 @@ const TABS = [
 export function App() {
   const [environment, setEnvironment] = useState<string>("");
   const env = environment || undefined;
+
+  const environments = useQuery({
+    queryKey: ["environments"],
+    queryFn: api.environments,
+    staleTime: 60_000,
+  });
+  const options = environments.data ?? [];
 
   return (
     <div className="flex h-full flex-col">
@@ -40,12 +49,15 @@ export function App() {
           <select
             value={environment}
             onChange={(e) => setEnvironment(e.target.value)}
-            className="rounded-md border border-line bg-panel px-2.5 py-1.5 text-[13px]"
+            disabled={options.length === 0}
+            className="rounded-md border border-line bg-panel px-2.5 py-1.5 text-[13px] disabled:opacity-50"
           >
             <option value="">all environments</option>
-            <option value="production">production</option>
-            <option value="preview">preview</option>
-            <option value="development">development</option>
+            {options.map((e) => (
+              <option key={e} value={e}>
+                {e}
+              </option>
+            ))}
           </select>
         </div>
       </header>
