@@ -42,6 +42,11 @@ export const spanColumns: Record<string, ColumnSpec> = {
 export const spanIndexes: { name: string; columns: string[] }[] = [
   { name: "breadcrumb_spans_trace_id", columns: ["trace_id"] },
   { name: "breadcrumb_spans_env_start", columns: ["environment", "start_time"] },
+  // Back the query-surface filters (traceFilterSql). Composite with trace_id so
+  // the `trace_id IN (SELECT trace_id WHERE <col> = ?)` subqueries stay index-only.
+  { name: "breadcrumb_spans_user_id", columns: ["user_id", "trace_id"] },
+  { name: "breadcrumb_spans_model", columns: ["model", "trace_id"] },
+  { name: "breadcrumb_spans_status", columns: ["status", "trace_id"] },
 ];
 
 /** Tiny key/value table for cross-instance coordination (sweep claims). */

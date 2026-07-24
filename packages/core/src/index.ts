@@ -12,6 +12,7 @@ import type {
   TraceSummary,
 } from "./db/types.js";
 import { clampLimit, pageOf } from "./db/rows.js";
+import { capPayload } from "./sanitize.js";
 import {
   createTelemetryPipeline,
   type TelemetryOptions,
@@ -51,6 +52,25 @@ export interface BreadcrumbOptions {
    * Omit to store only costs you set yourself — breadcrumb assumes no prices.
    */
   pricing?: Pricing;
+  /**
+   * Scrub PII or trim payloads before storage. Runs on every span from every
+   * path (manual, AI SDK, external ingest) just before it's written. Mutate the
+   * span in place, or return a replacement.
+   */
+  redact?: (span: SpanRecord) => SpanRecord | void;
+  /**
+   * Max characters kept for a span's captured input/output; longer payloads are
+   * truncated with a marker so one call can't write megabytes. Default 16384;
+   * set 0 to disable.
+   */
+  maxPayloadChars?: number;
+  /**
+   * "batch" (default): buffer spans and export every ~2s — best for a
+   * long-running server. "sync": export each span as it ends, for serverless or
+   * edge where a final flush isn't guaranteed. Either way, `await bc.flush()`
+   * (or `waitUntil(bc.flush())`) before a serverless function returns.
+   */
+  flushMode?: "batch" | "sync";
 }
 
 export interface Breadcrumb {
@@ -94,6 +114,8 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
   const basePath = options.basePath ?? "/breadcrumb";
   const adapter = options.database;
   const pricing = resolvePricing(options.pricing);
+  const redact = options.redact;
+  const maxPayloadChars = options.maxPayloadChars ?? 16384;
 
   // Lazy one-time migrate before the first DB operation.
   let readyPromise: Promise<void> | null = null;
@@ -138,8 +160,16 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
     },
     async ingestSpans({ spans }) {
       await ready();
-      for (const span of spans) applyPricing(span, pricing);
-      await adapter.insertSpans(spans);
+      // Single write funnel: redact (user) → cap payloads → price, for every path.
+      const list = redact ? spans.map((s) => redact(s) ?? s) : spans;
+      for (const span of list) {
+        if (maxPayloadChars > 0) {
+          span.input = capPayload(span.input, maxPayloadChars);
+          span.output = capPayload(span.output, maxPayloadChars);
+        }
+        applyPricing(span, pricing);
+      }
+      await adapter.insertSpans(list);
       await sweeper.maybeSweep();
     },
     async runRetention() {
@@ -151,6 +181,7 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
   const pipeline = createTelemetryPipeline({
     environment,
     write: (spans) => api.ingestSpans({ spans }),
+    flushMode: options.flushMode,
   });
   const trace = createTraceFn(pipeline.tracer);
 

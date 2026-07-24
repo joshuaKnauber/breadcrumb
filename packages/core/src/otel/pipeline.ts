@@ -4,6 +4,7 @@ import { ExportResultCode, type ExportResult } from "@opentelemetry/core";
 import {
   BasicTracerProvider,
   BatchSpanProcessor,
+  SimpleSpanProcessor,
   type ReadableSpan,
   type SpanExporter,
 } from "@opentelemetry/sdk-trace-base";
@@ -68,13 +69,17 @@ class AdapterSpanExporter implements SpanExporter {
 export function createTelemetryPipeline(deps: {
   environment: string;
   write: (spans: SpanRecord[]) => Promise<void>;
+  /** "sync" exports each span as it ends (serverless/edge); default batches. */
+  flushMode?: "batch" | "sync";
 }): TelemetryPipeline {
   ensureContextManager();
 
   const exporter = new AdapterSpanExporter(deps.write, deps.environment);
-  const provider = new BasicTracerProvider({
-    spanProcessors: [new BatchSpanProcessor(exporter, { scheduledDelayMillis: 2000 })],
-  });
+  const processor =
+    deps.flushMode === "sync"
+      ? new SimpleSpanProcessor(exporter)
+      : new BatchSpanProcessor(exporter, { scheduledDelayMillis: 2000 });
+  const provider = new BasicTracerProvider({ spanProcessors: [processor] });
   const tracer = provider.getTracer("breadcrumb");
 
   return {
