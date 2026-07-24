@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, fmtCost, fmtMs, fmtTokens, fmtTime } from "./api.js";
 import type { RunSummary, SessionSummary } from "./types.js";
-import { preview } from "./tree.js";
+import { preview } from "@breadcrumb-sh/core/kit";
 import { TraceExplorer } from "./TraceExplorer.js";
 
 export function SessionsView({ environment }: { environment?: string }) {

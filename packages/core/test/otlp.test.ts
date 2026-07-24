@@ -84,7 +84,7 @@ describe("OTLP ingest", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ partialSuccess: {} });
 
-    const traces = await bc.api.listTraces();
+    const { items: traces } = await bc.api.listTraces();
     expect(traces).toHaveLength(1);
     expect(traces[0]).toMatchObject({
       name: "chat gpt-5",

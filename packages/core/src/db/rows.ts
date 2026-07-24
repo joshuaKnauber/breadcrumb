@@ -2,11 +2,79 @@ import type {
   CostDatum,
   CostGroup,
   CostSummary,
+  Page,
   RunSummary,
   SessionSummary,
   SpanRecord,
+  Stats,
+  TraceFilter,
   TraceSummary,
 } from "./types.js";
+
+/** Binds a value and returns its SQL placeholder — `?` (sqlite) or `$n` (pg). */
+export type Placeholder = (value: unknown) => string;
+
+/** Page size, defaulted and bounded so a caller can't request the whole table. */
+export function clampLimit(limit: number | undefined): number {
+  return Math.min(Math.max(limit ?? 50, 1), 500);
+}
+
+/**
+ * Trace-selecting predicate for the WHERE clause, ANDing one `trace_id IN (…)`
+ * subquery per active filter. Kept as subqueries (not a flat row WHERE) because
+ * dimensions live on different spans of a trace — the root carries userId, a
+ * child carries model — so a single row rarely satisfies two at once. Returns
+ * "" when no filter is set.
+ */
+export function traceFilterSql(table: string, filter: TraceFilter, ph: Placeholder): string {
+  const preds: string[] = [];
+  const scope: string[] = [];
+  if (filter.environment !== undefined) scope.push(`environment = ${ph(filter.environment)}`);
+  if (filter.since !== undefined) scope.push(`start_time >= ${ph(filter.since)}`);
+  if (filter.until !== undefined) scope.push(`start_time <= ${ph(filter.until)}`);
+  if (scope.length) preds.push(`trace_id IN (SELECT trace_id FROM ${table} WHERE ${scope.join(" AND ")})`);
+  if (filter.userId !== undefined) {
+    preds.push(`trace_id IN (SELECT trace_id FROM ${table} WHERE user_id = ${ph(filter.userId)})`);
+  }
+  if (filter.model !== undefined) {
+    preds.push(`trace_id IN (SELECT trace_id FROM ${table} WHERE model = ${ph(filter.model)})`);
+  }
+  if (filter.status === "error") {
+    preds.push(`trace_id IN (SELECT trace_id FROM ${table} WHERE status = 'error')`);
+  }
+  if (filter.status === "ok") {
+    preds.push(`trace_id NOT IN (SELECT trace_id FROM ${table} WHERE status = 'error')`);
+  }
+  return preds.join(" AND ");
+}
+
+/** Keyset predicate for "rows after `cursor`" given a DESC (sortExpr, keyExpr). */
+export function keysetSql(sortExpr: string, keyExpr: string, cursor: string, ph: Placeholder): string {
+  const c = decodeCursor(cursor);
+  if (!c) return "";
+  return `(${sortExpr} < ${ph(c.sort)} OR (${sortExpr} = ${ph(c.sort)} AND ${keyExpr} < ${ph(c.key)}))`;
+}
+
+const CURSOR_SEP = "|";
+
+export function encodeCursor(sort: number, key: string): string {
+  return `${sort}${CURSOR_SEP}${key}`;
+}
+
+function decodeCursor(cursor: string): { sort: number; key: string } | null {
+  const i = cursor.indexOf(CURSOR_SEP);
+  if (i < 0) return null;
+  const sort = Number(cursor.slice(0, i));
+  const key = cursor.slice(i + 1);
+  return Number.isFinite(sort) && key ? { sort, key } : null;
+}
+
+/** Wrap a page of rows with its next cursor (null when the page wasn't full). */
+export function pageOf<T>(items: T[], limit: number, sortOf: (row: T) => number, keyOf: (row: T) => string): Page<T> {
+  const last = items[items.length - 1];
+  const nextCursor = items.length >= limit && last ? encodeCursor(sortOf(last), keyOf(last)) : null;
+  return { items, nextCursor };
+}
 
 /** Span -> DB row. JSON payloads are stringified (works for TEXT and JSONB). */
 export function spanToRow(span: SpanRecord): Record<string, unknown> {
@@ -138,9 +206,11 @@ export function rowToRunSummary(row: Record<string, unknown>): RunSummary {
 /**
  * Session aggregation. A trace's session is derived first (only the root span
  * reliably carries session_id — AI SDK child spans don't), then traces group
- * into sessions; sessionless traces stand alone keyed by trace_id.
+ * into sessions; sessionless traces stand alone keyed by trace_id. `whereSql`
+ * filters which traces feed the rollup; `havingSql` is the outer keyset.
+ * Ordered by last activity (MAX end_time) so the cursor key sits in the row.
  */
-export function sessionSummarySelect(table: string, envFilter: string): string {
+export function sessionSummarySelect(table: string, whereSql: string, havingSql: string): string {
   return `SELECT
     COALESCE(t.session_id, t.trace_id) AS session_key,
     MAX(t.session_id) AS session_id,
@@ -167,11 +237,51 @@ export function sessionSummarySelect(table: string, envFilter: string): string {
       SUM(COALESCE(output_tokens, 0)) AS output_tokens,
       SUM(cost) AS cost
     FROM ${table}
-    ${envFilter}
+    ${whereSql ? `WHERE ${whereSql}` : ""}
     GROUP BY trace_id
   ) t
   GROUP BY COALESCE(t.session_id, t.trace_id)
-  ORDER BY MAX(t.start_time) DESC`;
+  ${havingSql ? `HAVING ${havingSql}` : ""}
+  ORDER BY MAX(t.end_time) DESC, COALESCE(t.session_id, t.trace_id) DESC`;
+}
+
+/** Headline stats over the filtered trace set: one row per trace, then rolled up. */
+export function statsSelect(table: string, whereSql: string): string {
+  return `SELECT
+    COUNT(*) AS runs,
+    SUM(has_error) AS errors,
+    SUM(cost) AS cost,
+    SUM(input_tokens) AS input_tokens,
+    SUM(output_tokens) AS output_tokens,
+    AVG(duration) AS avg_latency,
+    MAX(duration) AS max_latency
+  FROM (
+    SELECT trace_id,
+      MAX(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS has_error,
+      SUM(COALESCE(cost, 0)) AS cost,
+      SUM(COALESCE(input_tokens, 0)) AS input_tokens,
+      SUM(COALESCE(output_tokens, 0)) AS output_tokens,
+      MAX(end_time) - MIN(start_time) AS duration
+    FROM ${table}
+    ${whereSql ? `WHERE ${whereSql}` : ""}
+    GROUP BY trace_id
+  ) t`;
+}
+
+export function shapeStats(row: Record<string, unknown> | undefined): Stats {
+  const runs = numValue(row?.runs) ?? 0;
+  const errors = numValue(row?.errors) ?? 0;
+  const avg = numValue(row?.avg_latency);
+  return {
+    runs,
+    errors,
+    errorRate: runs > 0 ? errors / runs : 0,
+    cost: numValue(row?.cost) ?? 0,
+    inputTokens: numValue(row?.input_tokens) ?? 0,
+    outputTokens: numValue(row?.output_tokens) ?? 0,
+    avgLatencyMs: avg == null ? null : Math.round(avg),
+    maxLatencyMs: numValue(row?.max_latency),
+  };
 }
 
 export function runSummarySelect(table: string, keyFilter: string, castText: string): string {
@@ -292,8 +402,11 @@ export function shapeCostSummary(
   return { windowDays, totals, days, byModel, byFunction };
 }
 
-/** Shared aggregation SQL; adapters supply placeholder syntax + LIMIT/filter. */
-export function traceSummarySelect(table: string, envFilter: string): string {
+/**
+ * Shared trace aggregation. `whereSql` selects which traces to include (from
+ * traceFilterSql); `havingSql` is the keyset predicate. Adapters append LIMIT.
+ */
+export function traceSummarySelect(table: string, whereSql: string, havingSql: string): string {
   return `SELECT
     trace_id,
     COALESCE(MAX(CASE WHEN parent_span_id IS NULL THEN name END), MIN(name)) AS name,
@@ -308,7 +421,8 @@ export function traceSummarySelect(table: string, envFilter: string): string {
     SUM(COALESCE(output_tokens, 0)) AS output_tokens,
     SUM(cost) AS cost
   FROM ${table}
-  ${envFilter}
+  ${whereSql ? `WHERE ${whereSql}` : ""}
   GROUP BY trace_id
-  ORDER BY MIN(start_time) DESC`;
+  ${havingSql ? `HAVING ${havingSql}` : ""}
+  ORDER BY MIN(start_time) DESC, trace_id DESC`;
 }

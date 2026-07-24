@@ -2,12 +2,16 @@ import type {
   CostQueryOptions,
   CostSummary,
   DatabaseAdapter,
-  ListTracesOptions,
+  ListOptions,
+  Page,
   RunSummary,
   SessionSummary,
   SpanRecord,
+  Stats,
+  TraceFilter,
   TraceSummary,
 } from "./db/types.js";
+import { clampLimit, pageOf } from "./db/rows.js";
 import {
   createTelemetryPipeline,
   type TelemetryOptions,
@@ -58,14 +62,22 @@ export interface Breadcrumb {
   telemetry: (options?: TelemetryOptions) => TelemetrySettings;
   /** Flush buffered spans (serverless: call before the runtime freezes). */
   flush: () => Promise<void>;
-  /** Programmatic queries + ingest, callable server-side without HTTP. */
+  /**
+   * Programmatic queries + ingest, callable server-side without HTTP — the
+   * headless surface for building a custom admin UI over your own data.
+   */
   api: {
-    listTraces(options?: ListTracesOptions): Promise<TraceSummary[]>;
-    listSessions(options?: ListTracesOptions): Promise<SessionSummary[]>;
+    /** Traces (one per run), newest first, filtered + keyset-paginated. */
+    listTraces(options?: ListOptions): Promise<Page<TraceSummary>>;
+    /** Sessions (traces grouped by sessionId), by last activity, paginated. */
+    listSessions(options?: ListOptions): Promise<Page<SessionSummary>>;
     listRuns(options: { sessionKey: string }): Promise<RunSummary[]>;
     getTrace(options: { id: string }): Promise<SpanRecord[]>;
+    getSpan(options: { id: string }): Promise<SpanRecord | null>;
     listEnvironments(): Promise<string[]>;
     costSummary(options?: CostQueryOptions): Promise<CostSummary>;
+    /** Headline numbers (runs, error rate, cost, latency) over a filter. */
+    stats(options?: TraceFilter): Promise<Stats>;
     ingestSpans(options: { spans: SpanRecord[] }): Promise<void>;
     /** One bounded retention batch (for cron/manual sweeping); returns rows deleted. */
     runRetention(): Promise<number>;
@@ -92,11 +104,13 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
   const api: Breadcrumb["api"] = {
     async listTraces(opts = {}) {
       await ready();
-      return adapter.listTraces(opts);
+      const items = await adapter.listTraces(opts);
+      return pageOf(items, clampLimit(opts.limit), (t) => t.startTime, (t) => t.traceId);
     },
     async listSessions(opts = {}) {
       await ready();
-      return adapter.listSessions(opts);
+      const items = await adapter.listSessions(opts);
+      return pageOf(items, clampLimit(opts.limit), (s) => s.endTime ?? s.startTime, (s) => s.sessionKey);
     },
     async listRuns({ sessionKey }) {
       await ready();
@@ -106,6 +120,10 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
       await ready();
       return adapter.getTraceSpans(id);
     },
+    async getSpan({ id }) {
+      await ready();
+      return adapter.getSpan(id);
+    },
     async listEnvironments() {
       await ready();
       return adapter.listEnvironments();
@@ -113,6 +131,10 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
     async costSummary(opts = {}) {
       await ready();
       return adapter.costSummary(opts);
+    },
+    async stats(opts = {}) {
+      await ready();
+      return adapter.stats(opts);
     },
     async ingestSpans({ spans }) {
       await ready();
@@ -158,7 +180,11 @@ export type {
   CostDatum,
   CostGroup,
   DatabaseAdapter,
+  ListOptions,
   ListTracesOptions,
+  Page,
+  Stats,
+  TraceFilter,
   RunSummary,
   SessionSummary,
   SpanRecord,

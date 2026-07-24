@@ -1,8 +1,8 @@
-import type { SpanRecord } from "./types.js";
+import type { SpanRecord } from "../db/types.js";
 
 /**
  * Span tree with consecutive same-name siblings collapsed into groups.
- * Groups are UI-only: expanding one reveals every member span.
+ * Groups are display-only: expanding one reveals every member span.
  */
 export type TreeNode =
   | { type: "span"; span: SpanRecord; children: TreeNode[] }

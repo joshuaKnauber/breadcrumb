@@ -1,9 +1,12 @@
 import { createRequire } from "node:module";
-import type { DatabaseAdapter, ListTracesOptions } from "../db/types.js";
+import type { DatabaseAdapter, ListOptions, TraceFilter } from "../db/types.js";
 import { META_TABLE, SPANS_TABLE, spanColumns, spanIndexes, type ColumnSpec } from "../db/schema.js";
 import {
+  clampLimit,
   costByDaySelect,
   costByFunctionSelect,
+  keysetSql,
+  type Placeholder,
   rowToRunSummary,
   rowToSessionSummary,
   rowToSpan,
@@ -11,9 +14,18 @@ import {
   runSummarySelect,
   sessionSummarySelect,
   shapeCostSummary,
+  shapeStats,
   spanToRow,
+  statsSelect,
+  traceFilterSql,
   traceSummarySelect,
 } from "../db/rows.js";
+
+/** Positional-param collector: each ph() call appends a value and yields "$n". */
+function collector(): { values: unknown[]; ph: Placeholder } {
+  const values: unknown[] = [];
+  return { values, ph: (v) => (values.push(v), `$${values.length}`) };
+}
 
 const PG_TYPES = { text: "TEXT", integer: "BIGINT", real: "DOUBLE PRECISION", json: "JSONB" } as const;
 
@@ -127,28 +139,24 @@ export function postgres(connectionOrClient: string | PgQueryable): DatabaseAdap
       );
     },
 
-    async listTraces(options: ListTracesOptions) {
-      const values: unknown[] = [];
-      let envFilter = "";
-      if (options.environment) {
-        values.push(options.environment);
-        envFilter = `WHERE environment = $${values.length}`;
-      }
-      values.push(Math.min(options.limit ?? 50, 500));
-      const sql = traceSummarySelect(SPANS_TABLE, envFilter) + ` LIMIT $${values.length}`;
+    async listTraces(options: ListOptions) {
+      const { values, ph } = collector();
+      const whereSql = traceFilterSql(SPANS_TABLE, options, ph);
+      const havingSql = options.cursor
+        ? keysetSql("MIN(start_time)", "trace_id", options.cursor, ph)
+        : "";
+      const sql = traceSummarySelect(SPANS_TABLE, whereSql, havingSql) + ` LIMIT ${ph(clampLimit(options.limit))}`;
       const { rows } = await db.query(sql, values);
       return rows.map(rowToTraceSummary);
     },
 
-    async listSessions(options: ListTracesOptions) {
-      const values: unknown[] = [];
-      let envFilter = "";
-      if (options.environment) {
-        values.push(options.environment);
-        envFilter = `WHERE environment = $${values.length}`;
-      }
-      values.push(Math.min(options.limit ?? 50, 500));
-      const sql = sessionSummarySelect(SPANS_TABLE, envFilter) + ` LIMIT $${values.length}`;
+    async listSessions(options: ListOptions) {
+      const { values, ph } = collector();
+      const whereSql = traceFilterSql(SPANS_TABLE, options, ph);
+      const havingSql = options.cursor
+        ? keysetSql("MAX(t.end_time)", "COALESCE(t.session_id, t.trace_id)", options.cursor, ph)
+        : "";
+      const sql = sessionSummarySelect(SPANS_TABLE, whereSql, havingSql) + ` LIMIT ${ph(clampLimit(options.limit))}`;
       const { rows } = await db.query(sql, values);
       return rows.map(rowToSessionSummary);
     },
@@ -180,12 +188,24 @@ export function postgres(connectionOrClient: string | PgQueryable): DatabaseAdap
       return shapeCostSummary(days, dayRows, funcRows);
     },
 
+    async stats(filter: TraceFilter) {
+      const { values, ph } = collector();
+      const whereSql = traceFilterSql(SPANS_TABLE, filter, ph);
+      const { rows } = await db.query(statsSelect(SPANS_TABLE, whereSql), values);
+      return shapeStats(rows[0]);
+    },
+
     async getTraceSpans(traceId) {
       const { rows } = await db.query(
         `SELECT * FROM ${SPANS_TABLE} WHERE trace_id = $1 ORDER BY start_time ASC, id ASC`,
         [traceId]
       );
       return rows.map(rowToSpan);
+    },
+
+    async getSpan(id) {
+      const { rows } = await db.query(`SELECT * FROM ${SPANS_TABLE} WHERE id = $1 LIMIT 1`, [id]);
+      return rows[0] ? rowToSpan(rows[0]) : null;
     },
 
     async deleteExpiredSpans(rules, limit) {

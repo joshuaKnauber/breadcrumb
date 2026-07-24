@@ -55,9 +55,53 @@ export interface TraceSummary {
   cost: number | null;
 }
 
-export interface ListTracesOptions {
-  limit?: number;
+/**
+ * Filters shared by list + stats queries. Each dimension selects *traces*
+ * (a trace matches if any of its spans satisfies the predicate), so a filtered
+ * list still aggregates a trace's full span set — counts and cost stay whole.
+ */
+export interface TraceFilter {
   environment?: string;
+  userId?: string;
+  /** "error" → traces with a failed span; "ok" → traces with none. */
+  status?: SpanStatus;
+  /** Traces containing a span with this exact model. */
+  model?: string;
+  /** Inclusive lower/upper bounds on span start_time (epoch ms). */
+  since?: number;
+  until?: number;
+}
+
+export interface ListOptions extends TraceFilter {
+  /** Page size. Default 50, clamped to 500. */
+  limit?: number;
+  /** Opaque keyset cursor from a previous page's `nextCursor`. */
+  cursor?: string;
+}
+
+/** Back-compat alias for the pre-filter options shape. */
+export type ListTracesOptions = ListOptions;
+
+/** One page of results plus the cursor to fetch the next (null at the end). */
+export interface Page<T> {
+  items: T[];
+  nextCursor: string | null;
+}
+
+/** Headline numbers over a filtered set of traces, for a custom dashboard. */
+export interface Stats {
+  /** Distinct traces (runs) in the set. */
+  runs: number;
+  /** Runs containing at least one failed span. */
+  errors: number;
+  /** errors / runs, 0 when empty. */
+  errorRate: number;
+  cost: number;
+  inputTokens: number;
+  outputTokens: number;
+  /** Mean/max root-span duration in ms; null when no run has ended. */
+  avgLatencyMs: number | null;
+  maxLatencyMs: number | null;
 }
 
 /**
@@ -150,12 +194,14 @@ export interface DatabaseAdapter {
   /** Create/upgrade breadcrumb's tables. Additive-only; safe to call repeatedly. */
   migrate(): Promise<MigrationResult>;
   insertSpans(spans: SpanRecord[]): Promise<void>;
-  listTraces(options: ListTracesOptions): Promise<TraceSummary[]>;
-  listSessions(options: ListTracesOptions): Promise<SessionSummary[]>;
+  listTraces(options: ListOptions): Promise<TraceSummary[]>;
+  listSessions(options: ListOptions): Promise<SessionSummary[]>;
   listRuns(sessionKey: string): Promise<RunSummary[]>;
   listEnvironments(): Promise<string[]>;
   costSummary(options: CostQueryOptions): Promise<CostSummary>;
+  stats(filter: TraceFilter): Promise<Stats>;
   getTraceSpans(traceId: string): Promise<SpanRecord[]>;
+  getSpan(id: string): Promise<SpanRecord | null>;
   /** Bounded delete of expired spans; returns rows deleted (may be < the backlog). */
   deleteExpiredSpans(rules: RetentionRule[], limit: number): Promise<number>;
   /**

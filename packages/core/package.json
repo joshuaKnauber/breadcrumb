@@ -16,6 +16,14 @@
       "types": "./dist/adapters/index.d.mts",
       "import": "./dist/adapters/index.mjs"
     },
+    "./kit": {
+      "types": "./dist/kit/index.d.mts",
+      "import": "./dist/kit/index.mjs"
+    },
+    "./client": {
+      "types": "./dist/client.d.mts",
+      "import": "./dist/client.mjs"
+    },
     "./node": {
       "types": "./dist/node.d.mts",
       "import": "./dist/node.mjs"

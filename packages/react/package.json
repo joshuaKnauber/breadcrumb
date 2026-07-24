@@ -1,0 +1,34 @@
+{
+  "name": "@breadcrumb-sh/react",
+  "version": "0.0.0",
+  "description": "React hooks for building a custom Breadcrumb tracing UI over your own data.",
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "@tanstack/react-query": ">=5"
+  },
+  "dependencies": {
+    "@breadcrumb-sh/core": "0.0.0"
+  },
+  "devDependencies": {
+    "@tanstack/react-query": "^5.62.0",
+    "@types/react": "^19.0.0",
+    "react": "^19.0.0",
+    "tsdown": "^0.22.11",
+    "typescript": "^5.7.2"
+  }
+}

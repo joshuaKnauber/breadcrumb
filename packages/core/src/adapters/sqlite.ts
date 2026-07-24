@@ -1,10 +1,13 @@
 import { createRequire } from "node:module";
 import type DatabaseType from "better-sqlite3";
-import type { DatabaseAdapter, ListTracesOptions } from "../db/types.js";
+import type { DatabaseAdapter, ListOptions, TraceFilter } from "../db/types.js";
 import { META_TABLE, SPANS_TABLE, spanColumns, spanIndexes, type ColumnSpec } from "../db/schema.js";
 import {
+  clampLimit,
   costByDaySelect,
   costByFunctionSelect,
+  keysetSql,
+  type Placeholder,
   rowToRunSummary,
   rowToSessionSummary,
   rowToSpan,
@@ -12,9 +15,18 @@ import {
   runSummarySelect,
   sessionSummarySelect,
   shapeCostSummary,
+  shapeStats,
   spanToRow,
+  statsSelect,
+  traceFilterSql,
   traceSummarySelect,
 } from "../db/rows.js";
+
+/** Positional-param collector: each ph() call appends a value and yields "?". */
+function collector(): { params: unknown[]; ph: Placeholder } {
+  const params: unknown[] = [];
+  return { params, ph: (v) => (params.push(v), "?") };
+}
 
 const SQLITE_TYPES = { text: "TEXT", integer: "INTEGER", real: "REAL", json: "TEXT" } as const;
 
@@ -122,25 +134,25 @@ export function sqlite(fileOrDb: string | DatabaseType.Database): DatabaseAdapte
       insertAll(spans.map(spanToRow));
     },
 
-    async listTraces(options: ListTracesOptions) {
-      const limit = Math.min(options.limit ?? 50, 500);
-      const sql =
-        traceSummarySelect(SPANS_TABLE, options.environment ? "WHERE environment = @environment" : "") +
-        " LIMIT @limit";
-      const rows = db
-        .prepare(sql)
-        .all({ limit, ...(options.environment ? { environment: options.environment } : {}) }) as Record<string, unknown>[];
+    async listTraces(options: ListOptions) {
+      const { params, ph } = collector();
+      const whereSql = traceFilterSql(SPANS_TABLE, options, ph);
+      const havingSql = options.cursor
+        ? keysetSql("MIN(start_time)", "trace_id", options.cursor, ph)
+        : "";
+      const sql = traceSummarySelect(SPANS_TABLE, whereSql, havingSql) + ` LIMIT ${ph(clampLimit(options.limit))}`;
+      const rows = db.prepare(sql).all(...params) as Record<string, unknown>[];
       return rows.map(rowToTraceSummary);
     },
 
-    async listSessions(options: ListTracesOptions) {
-      const limit = Math.min(options.limit ?? 50, 500);
-      const sql =
-        sessionSummarySelect(SPANS_TABLE, options.environment ? "WHERE environment = @environment" : "") +
-        " LIMIT @limit";
-      const rows = db
-        .prepare(sql)
-        .all({ limit, ...(options.environment ? { environment: options.environment } : {}) }) as Record<string, unknown>[];
+    async listSessions(options: ListOptions) {
+      const { params, ph } = collector();
+      const whereSql = traceFilterSql(SPANS_TABLE, options, ph);
+      const havingSql = options.cursor
+        ? keysetSql("MAX(t.end_time)", "COALESCE(t.session_id, t.trace_id)", options.cursor, ph)
+        : "";
+      const sql = sessionSummarySelect(SPANS_TABLE, whereSql, havingSql) + ` LIMIT ${ph(clampLimit(options.limit))}`;
+      const rows = db.prepare(sql).all(...params) as Record<string, unknown>[];
       return rows.map(rowToSessionSummary);
     },
 
@@ -173,11 +185,27 @@ export function sqlite(fileOrDb: string | DatabaseType.Database): DatabaseAdapte
       return shapeCostSummary(days, dayRows, funcRows);
     },
 
+    async stats(filter: TraceFilter) {
+      const { params, ph } = collector();
+      const whereSql = traceFilterSql(SPANS_TABLE, filter, ph);
+      const row = db.prepare(statsSelect(SPANS_TABLE, whereSql)).get(...params) as
+        | Record<string, unknown>
+        | undefined;
+      return shapeStats(row);
+    },
+
     async getTraceSpans(traceId) {
       const rows = db
         .prepare(`SELECT * FROM ${SPANS_TABLE} WHERE trace_id = ? ORDER BY start_time ASC, id ASC`)
         .all(traceId) as Record<string, unknown>[];
       return rows.map(rowToSpan);
+    },
+
+    async getSpan(id) {
+      const row = db.prepare(`SELECT * FROM ${SPANS_TABLE} WHERE id = ? LIMIT 1`).get(id) as
+        | Record<string, unknown>
+        | undefined;
+      return row ? rowToSpan(row) : null;
     },
 
     async deleteExpiredSpans(rules, limit) {

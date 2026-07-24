@@ -88,7 +88,7 @@ describe("bc.api.runRetention", () => {
       ],
     });
     expect(await bc.api.runRetention()).toBe(2);
-    expect(await bc.api.listTraces()).toHaveLength(1);
+    expect((await bc.api.listTraces()).items).toHaveLength(1);
   });
 });
 

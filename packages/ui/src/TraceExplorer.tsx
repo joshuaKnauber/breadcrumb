@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, fmtCost, fmtMs } from "./api.js";
 import type { SpanRecord } from "./types.js";
-import { asMessages, buildTree, errorPaths, type TreeNode } from "./tree.js";
+import { asMessages, buildTree, errorPaths, type TreeNode } from "@breadcrumb-sh/core/kit";
 
 // One hue: model calls are what this tool traces, so only `llm` is tinted.
 const KIND_STYLES: Record<string, string> = {

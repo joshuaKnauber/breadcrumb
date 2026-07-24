@@ -1,4 +1,5 @@
-import type { DatabaseAdapter, SpanRecord } from "./db/types.js";
+import type { DatabaseAdapter, ListOptions, SpanRecord, TraceFilter } from "./db/types.js";
+import { clampLimit, pageOf } from "./db/rows.js";
 import { normalizeSpanData } from "./otel/normalize.js";
 import { parseOtlpJson } from "./otel/otlp.js";
 import { renderApp } from "./ui.js";
@@ -20,6 +21,33 @@ export interface RouterContext {
 }
 
 const INGEST_KEY_HEADER = "x-breadcrumb-key";
+
+/** Shared query-string → TraceFilter parsing for list + stats routes. */
+function parseFilter(p: URLSearchParams): TraceFilter {
+  const numParam = (key: string): number | undefined => {
+    const raw = p.get(key);
+    if (raw === null) return undefined;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  const status = p.get("status");
+  return {
+    environment: p.get("environment") ?? undefined,
+    userId: p.get("userId") ?? undefined,
+    model: p.get("model") ?? undefined,
+    status: status === "error" ? "error" : status === "ok" ? "ok" : undefined,
+    since: numParam("since"),
+    until: numParam("until"),
+  };
+}
+
+function parseListOptions(p: URLSearchParams): ListOptions {
+  return {
+    ...parseFilter(p),
+    limit: Number(p.get("limit") ?? "") || undefined,
+    cursor: p.get("cursor") ?? undefined,
+  };
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -127,17 +155,15 @@ export function createHandler(ctx: RouterContext): (request: Request) => Promise
     if (method === "GET") {
       if (path === "/api/traces") {
         await ctx.ready();
-        const limit = Number(url.searchParams.get("limit") ?? "") || undefined;
-        const environment = url.searchParams.get("environment") ?? undefined;
-        const traces = await ctx.adapter.listTraces({ limit, environment });
-        return json({ traces });
+        const opts = parseListOptions(url.searchParams);
+        const items = await ctx.adapter.listTraces(opts);
+        return json(pageOf(items, clampLimit(opts.limit), (t) => t.startTime, (t) => t.traceId));
       }
       if (path === "/api/sessions") {
         await ctx.ready();
-        const limit = Number(url.searchParams.get("limit") ?? "") || undefined;
-        const environment = url.searchParams.get("environment") ?? undefined;
-        const sessions = await ctx.adapter.listSessions({ limit, environment });
-        return json({ sessions });
+        const opts = parseListOptions(url.searchParams);
+        const items = await ctx.adapter.listSessions(opts);
+        return json(pageOf(items, clampLimit(opts.limit), (s) => s.endTime ?? s.startTime, (s) => s.sessionKey));
       }
       const runsMatch = path.match(/^\/api\/sessions\/([^/]+)\/runs$/);
       if (runsMatch) {
@@ -150,12 +176,24 @@ export function createHandler(ctx: RouterContext): (request: Request) => Promise
         const environments = await ctx.adapter.listEnvironments();
         return json({ environments });
       }
+      if (path === "/api/stats") {
+        await ctx.ready();
+        const stats = await ctx.adapter.stats(parseFilter(url.searchParams));
+        return json(stats);
+      }
       if (path === "/api/cost") {
         await ctx.ready();
         const days = Number(url.searchParams.get("days") ?? "") || undefined;
         const environment = url.searchParams.get("environment") ?? undefined;
         const cost = await ctx.adapter.costSummary({ days, environment });
         return json(cost);
+      }
+      const spanMatch = path.match(/^\/api\/spans\/([^/]+)$/);
+      if (spanMatch) {
+        await ctx.ready();
+        const span = await ctx.adapter.getSpan(decodeURIComponent(spanMatch[1]!));
+        if (!span) return json({ error: "not found" }, 404);
+        return json({ span });
       }
       const traceMatch = path.match(/^\/api\/traces\/([^/]+)$/);
       if (traceMatch) {

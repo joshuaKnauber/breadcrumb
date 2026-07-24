@@ -28,7 +28,7 @@ describe("manual tracing", () => {
     expect(result).toBe("done");
     await bc.flush();
 
-    const traces = await bc.api.listTraces();
+    const { items: traces } = await bc.api.listTraces();
     expect(traces).toHaveLength(1);
     expect(traces[0]).toMatchObject({
       name: "support-reply",
@@ -61,7 +61,7 @@ describe("manual tracing", () => {
     ).rejects.toThrow("kaputt");
     await bc.flush();
 
-    const traces = await bc.api.listTraces();
+    const { items: traces } = await bc.api.listTraces();
     expect(traces).toHaveLength(1);
     expect(traces[0]!.errorCount).toBe(2); // child failed, root failed via rethrow
     const spans = await bc.api.getTrace({ id: traces[0]!.traceId });
@@ -115,7 +115,7 @@ describe("bc.telemetry (AI SDK dialect)", () => {
     );
     await bc.flush();
 
-    const traces = await bc.api.listTraces();
+    const { items: traces } = await bc.api.listTraces();
     expect(traces).toHaveLength(1);
     // usage counted once, on the doGenerate span — the outer mirror is skipped
     expect(traces[0]).toMatchObject({
@@ -151,7 +151,7 @@ describe("handler", () => {
 
     const res = await get(bc, "/admin/traces/api/traces");
     expect(res.status).toBe(200);
-    const { traces } = await res.json();
+    const { items: traces } = await res.json();
     expect(traces).toHaveLength(1);
 
     const detail = await get(bc, `/admin/traces/api/traces/${traces[0].traceId}`);
@@ -187,7 +187,7 @@ describe("handler", () => {
     expect(ok.status).toBe(200);
     expect(await ok.json()).toEqual({ ingested: 1 });
 
-    const traces = await bc.api.listTraces();
+    const { items: traces } = await bc.api.listTraces();
     expect(traces[0]).toMatchObject({ name: "external-call", environment: "test", inputTokens: 10 });
   });
 });
