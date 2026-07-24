@@ -1,0 +1,35 @@
+---
+layout: ../../../layouts/DocsLayout.astro
+title: Vercel AI SDK
+description: Trace Vercel AI SDK calls by passing bc.telemetry() as experimental_telemetry.
+---
+
+# Vercel AI SDK
+
+Pass `bc.telemetry()` as the AI SDK's `experimental_telemetry`. Breadcrumb reads
+the `ai.*` and `gen_ai.*` attributes the SDK emits — model, provider, token usage
+(including cache and reasoning tokens), inputs, and outputs.
+
+```ts
+const { text } = await streamText({
+  model: openai("gpt-5"),
+  prompt,
+  experimental_telemetry: bc.telemetry({
+    functionId: "generate-answer",
+    metadata: { userId, sessionId },
+  }),
+});
+```
+
+`functionId` names the run. `metadata` is attached to the trace and surfaces as
+`userId` and `sessionId` when those keys are present, so you can group traces by
+user or conversation.
+
+Usage is counted once per model call, even across multi-step tool loops — the
+outer wrapper spans the SDK emits are treated as duplicates, not double-counted.
+
+## Next steps
+
+- [Cost & tokens](/docs/cost/): turn token usage into cost.
+- [Manual tracing](/docs/instrumenting/manual/): trace the code around your model
+  calls.

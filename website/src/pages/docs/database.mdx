@@ -1,0 +1,82 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: Database & adapters
+description: Choose the SQLite or Postgres adapter and reuse your existing connection pool.
+---
+
+# Database & adapters
+
+Breadcrumb stores traces in your own database through an adapter. Two are built
+in: SQLite for local development and Postgres for production. This page covers
+choosing one and reusing your existing connection. For how the schema is created
+and upgraded, see [Migrations](/docs/migrations/).
+
+## Adapters
+
+Import adapters from `@breadcrumb-sh/core/adapters`. Each database driver is an
+optional peer dependency, so you install only the one you use.
+
+### SQLite
+
+Pass a file path, which is created if it's missing, or an existing
+`better-sqlite3` instance. SQLite is the fastest way to get tracing locally with
+no services to run.
+
+```ts
+import { sqlite } from "@breadcrumb-sh/core/adapters";
+
+const database = sqlite(".breadcrumb/dev.db");
+```
+
+Install the driver with `npm i better-sqlite3`.
+
+### Postgres
+
+Pass a connection string, or — better — your app's existing `pg` pool, so
+Breadcrumb shares connections instead of opening its own.
+
+```ts
+import { postgres } from "@breadcrumb-sh/core/adapters";
+import { pool } from "./db"; // your existing pg.Pool
+
+const database = postgres(pool);
+```
+
+Install the driver with `npm i pg`. A connection string also works:
+`postgres(process.env.DATABASE_URL!)`.
+
+## Switching by environment
+
+A common pattern is SQLite locally and Postgres in production, selected by an
+environment variable:
+
+```ts
+import { sqlite, postgres } from "@breadcrumb-sh/core/adapters";
+
+const database = process.env.DATABASE_URL
+  ? postgres(process.env.DATABASE_URL)
+  : sqlite(".breadcrumb/dev.db");
+
+export const bc = breadcrumb({ database, basePath: "/admin/traces" });
+```
+
+## Migrations
+
+Breadcrumb creates and upgrades its own tables. Migrations are additive-only and
+safe to run repeatedly. In development the schema is created automatically on
+first use; in production you run one command in your deploy step. See
+[Migrations](/docs/migrations/) for how it works, the per-adapter details, and
+the schema itself.
+
+## Custom stores
+
+To use a database other than Postgres or SQLite, implement the
+`DatabaseAdapter` interface and pass your implementation as `database`. The two
+built-in SQL adapters share their query builders, so a new SQL store is mostly
+driver and placeholder differences.
+
+## Next steps
+
+- [Migrations](/docs/migrations/): how the schema is created and upgraded.
+- [Local development](/docs/local-development/): the dev workflow and standalone
+  server.

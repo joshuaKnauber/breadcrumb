@@ -1,0 +1,51 @@
+---
+layout: ../../../layouts/DocsLayout.astro
+title: Manual tracing
+description: Trace any code with bc.trace() and nest child spans with t.span().
+---
+
+# Manual tracing
+
+`bc.trace()` opens a root span; `t.span()` nests children. AI SDK calls made
+inside the callback nest automatically through context propagation, so you can
+wrap a whole pipeline and see every step.
+
+```ts
+await bc.trace("nightly-summary", { userId }, async (t) => {
+  t.set({ input: prompt });
+
+  const docs = await t.span("retrieve", { kind: "retrieval" }, async (s) => {
+    const results = await search(prompt);
+    s.set({ output: results });
+    return results;
+  });
+
+  await t.span("write", { kind: "tool" }, async () => save(docs));
+});
+```
+
+A thrown error inside a span marks it failed and rethrows — the trace is still
+persisted, so failures show up in the dashboard.
+
+## Setting span fields
+
+When you're not using the AI SDK, set the model and usage fields yourself so
+cost and token views work:
+
+```ts
+t.set({
+  model: "gpt-5",
+  inputTokens: 1200,
+  outputTokens: 240,
+  cachedInputTokens: 800,
+  cost: 0.004,
+});
+```
+
+The `kind` field (`"llm"`, `"tool"`, `"retrieval"`, `"embedding"`, `"agent"`, or
+`"span"`) controls how the step is labeled in the trace view.
+
+## Next steps
+
+- [Cost & tokens](/docs/cost/): how token fields become cost.
+- [Querying your data](/docs/querying/): read your traces back.

@@ -145,6 +145,24 @@ export interface MigrationResult {
   addedColumns: string[];
 }
 
+export type Dialect = "postgres" | "sqlite";
+
+/** A snapshot of the live schema, from `inspectSchema()`, used to plan a diff. */
+export interface SchemaState {
+  spansExists: boolean;
+  spansColumns: Set<string>;
+  indexNames: Set<string>;
+  metaExists: boolean;
+}
+
+/** The DDL needed to bring a database to the current schema. */
+export interface MigrationPlan {
+  /** Statements to run, in order, without trailing semicolons. */
+  statements: string[];
+  createdTables: string[];
+  addedColumns: string[];
+}
+
 /**
  * One retention rule: delete spans older than `before` (epoch ms).
  * `environment: null` matches every environment NOT covered by another rule.
@@ -193,6 +211,8 @@ export interface DatabaseAdapter {
   id: string;
   /** Create/upgrade breadcrumb's tables. Additive-only; safe to call repeatedly. */
   migrate(): Promise<MigrationResult>;
+  /** Read the live schema, so a migration can be planned without applying it. */
+  inspectSchema(): Promise<SchemaState>;
   insertSpans(spans: SpanRecord[]): Promise<void>;
   listTraces(options: ListOptions): Promise<TraceSummary[]>;
   listSessions(options: ListOptions): Promise<SessionSummary[]>;

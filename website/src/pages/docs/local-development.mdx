@@ -1,0 +1,69 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: Local development
+description: Run Breadcrumb locally with SQLite, plus the standalone dev server for a quick viewer.
+---
+
+# Local development
+
+Locally, you want tracing with zero infrastructure. The simplest setup uses the
+SQLite adapter with a file — no database server, no migration commands. This
+page covers the embedded workflow and the standalone dev server.
+
+## Embedded in your app
+
+Point `database` at a SQLite file in development. The schema is created on first
+use, so you just run your app and open the dashboard at your `basePath`.
+
+```ts
+import { sqlite, postgres } from "@breadcrumb-sh/core/adapters";
+
+export const bc = breadcrumb({
+  database: process.env.DATABASE_URL
+    ? postgres(process.env.DATABASE_URL)
+    : sqlite(".breadcrumb/dev.db"),
+  basePath: "/admin/traces",
+});
+```
+
+{/* prettier-ignore */}
+> [!TIP]
+> Add `.breadcrumb/` to your `.gitignore`. SQLite writes sidecar files
+> (`-wal`, `-shm`) next to the database that you don't want to commit.
+
+With this in place, your dashboard is part of your app during development — same
+mount path, same auth, exactly what you ship.
+
+## The standalone dev server
+
+Sometimes you want a trace viewer that isn't wired into your app yet — for
+example when you're sending traces from a script or another service. The CLI
+ships a standalone server:
+
+```bash
+npx breadcrumb dev
+```
+
+This starts a local server that stores traces in a SQLite file and serves the
+dashboard. By default it listens on port 4106 with an ingest key of `dev`:
+
+```text
+▸ breadcrumb dev server → http://localhost:4106
+▸ ingest (key: "dev")   → http://localhost:4106/api/ingest/spans
+▸ storage               → .breadcrumb/dev.db
+```
+
+Point any OpenTelemetry or JSON exporter at the ingest endpoint to see traces
+show up. The server is local and unauthenticated by design.
+
+### Options
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--port` | `4106` | Port to listen on. |
+| `--db` | `.breadcrumb/dev.db` | SQLite file to store traces in. |
+
+## Next steps
+
+- [Instrumenting](/docs/instrumenting/): send traces from your code.
+- [Production](/docs/production/): move from SQLite to Postgres and deploy.

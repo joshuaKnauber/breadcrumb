@@ -1,0 +1,42 @@
+---
+import { docsNav } from "../lib/docsNav";
+
+const pathname = Astro.url.pathname.replace(/\/$/, "") + "/";
+const isActive = (href: string) => pathname === href;
+---
+
+{
+	docsNav.map((group) => (
+		<div class="flex flex-col gap-1.5">
+			<div class="text-[11px] font-mono uppercase tracking-[0.15em] text-fg-faint">{group.group}</div>
+			{group.items.map((item) => (
+				<Fragment>
+					<a
+						href={item.href}
+						class:list={[
+							"py-1 text-sm transition-colors",
+							isActive(item.href) ? "text-fg" : "text-fg-muted hover:text-fg",
+						]}
+					>
+						{item.label}
+					</a>
+					{item.items && (
+						<div class="ml-0.5 flex flex-col gap-0.5 border-l border-border pl-3">
+							{item.items.map((sub) => (
+								<a
+									href={sub.href}
+									class:list={[
+										"py-0.5 text-[13px] transition-colors",
+										isActive(sub.href) ? "text-fg" : "text-fg-subtle hover:text-fg",
+									]}
+								>
+									{sub.label}
+								</a>
+							))}
+						</div>
+					)}
+				</Fragment>
+			))}
+		</div>
+	))
+}

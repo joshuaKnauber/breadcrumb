@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
-import type { DatabaseAdapter, ListOptions, TraceFilter } from "../db/types.js";
-import { META_TABLE, SPANS_TABLE, spanColumns, spanIndexes, type ColumnSpec } from "../db/schema.js";
+import type { DatabaseAdapter, ListOptions, SchemaState, TraceFilter } from "../db/types.js";
+import { META_TABLE, SPANS_TABLE, spanColumns } from "../db/schema.js";
+import { planMigration } from "../db/ddl.js";
 import {
   clampLimit,
   costByDaySelect,
@@ -27,8 +28,6 @@ function collector(): { values: unknown[]; ph: Placeholder } {
   return { values, ph: (v) => (values.push(v), `$${values.length}`) };
 }
 
-const PG_TYPES = { text: "TEXT", integer: "BIGINT", real: "DOUBLE PRECISION", json: "JSONB" } as const;
-
 /** Anything with a pg-compatible query method: pg.Pool, pg.Client, PGlite. */
 export interface PgQueryable {
   query(text: string, values?: unknown[]): Promise<{ rows: Record<string, unknown>[] }>;
@@ -46,13 +45,6 @@ function createPool(connectionString: string): PgQueryable & { end?: () => Promi
 
 const COLUMN_NAMES = Object.keys(spanColumns);
 
-function columnDdl(name: string, spec: ColumnSpec): string {
-  const parts = [name, PG_TYPES[spec.type]];
-  if (spec.primary) parts.push("PRIMARY KEY");
-  if (!spec.nullable && !spec.primary) parts.push("NOT NULL");
-  return parts.join(" ");
-}
-
 /**
  * Postgres adapter. Pass a connection string (we create and own a small pool)
  * or your app's existing pg.Pool/pg.Client — recommended, one pool per app.
@@ -61,51 +53,32 @@ export function postgres(connectionOrClient: string | PgQueryable): DatabaseAdap
   const ownsPool = typeof connectionOrClient === "string";
   const db = ownsPool ? createPool(connectionOrClient) : connectionOrClient;
 
+  async function inspect(): Promise<SchemaState> {
+    const columns = await db.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_name = $1`,
+      [SPANS_TABLE]
+    );
+    const indexes = await db.query(`SELECT indexname FROM pg_indexes WHERE tablename = $1`, [SPANS_TABLE]);
+    const meta = await db.query(`SELECT 1 FROM information_schema.tables WHERE table_name = $1`, [META_TABLE]);
+    return {
+      spansExists: columns.rows.length > 0,
+      spansColumns: new Set(columns.rows.map((r) => r.column_name as string)),
+      indexNames: new Set(indexes.rows.map((r) => r.indexname as string)),
+      metaExists: meta.rows.length > 0,
+    };
+  }
+
   return {
     id: "postgres",
 
+    async inspectSchema() {
+      return inspect();
+    },
+
     async migrate() {
-      const createdTables: string[] = [];
-      const addedColumns: string[] = [];
-
-      const existing = await db.query(
-        `SELECT column_name FROM information_schema.columns WHERE table_name = $1`,
-        [SPANS_TABLE]
-      );
-
-      if (existing.rows.length === 0) {
-        const cols = Object.entries(spanColumns)
-          .map(([name, spec]) => columnDdl(name, spec))
-          .join(", ");
-        await db.query(`CREATE TABLE IF NOT EXISTS ${SPANS_TABLE} (${cols})`);
-        createdTables.push(SPANS_TABLE);
-      } else {
-        const have = new Set(existing.rows.map((r) => r.column_name as string));
-        for (const [name, spec] of Object.entries(spanColumns)) {
-          if (have.has(name)) continue;
-          // Additive columns are nullable so existing rows stay valid.
-          await db.query(`ALTER TABLE ${SPANS_TABLE} ADD COLUMN IF NOT EXISTS ${name} ${PG_TYPES[spec.type]}`);
-          addedColumns.push(`${SPANS_TABLE}.${name}`);
-        }
-      }
-
-      for (const idx of spanIndexes) {
-        await db.query(
-          `CREATE INDEX IF NOT EXISTS ${idx.name} ON ${SPANS_TABLE} (${idx.columns.join(", ")})`
-        );
-      }
-
-      const meta = await db.query(
-        `SELECT 1 FROM information_schema.tables WHERE table_name = $1`,
-        [META_TABLE]
-      );
-      if (meta.rows.length === 0) {
-        await db.query(
-          `CREATE TABLE IF NOT EXISTS ${META_TABLE} (key TEXT PRIMARY KEY, value BIGINT NOT NULL)`
-        );
-        createdTables.push(META_TABLE);
-      }
-      return { createdTables, addedColumns };
+      const plan = planMigration("postgres", await inspect());
+      for (const stmt of plan.statements) await db.query(stmt);
+      return { createdTables: plan.createdTables, addedColumns: plan.addedColumns };
     },
 
     async claimSweep(now, intervalMs) {

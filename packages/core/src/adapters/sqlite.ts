@@ -1,7 +1,8 @@
 import { createRequire } from "node:module";
 import type DatabaseType from "better-sqlite3";
-import type { DatabaseAdapter, ListOptions, TraceFilter } from "../db/types.js";
-import { META_TABLE, SPANS_TABLE, spanColumns, spanIndexes, type ColumnSpec } from "../db/schema.js";
+import type { DatabaseAdapter, ListOptions, SchemaState, TraceFilter } from "../db/types.js";
+import { META_TABLE, SPANS_TABLE, spanColumns } from "../db/schema.js";
+import { planMigration } from "../db/ddl.js";
 import {
   clampLimit,
   costByDaySelect,
@@ -28,8 +29,6 @@ function collector(): { params: unknown[]; ph: Placeholder } {
   return { params, ph: (v) => (params.push(v), "?") };
 }
 
-const SQLITE_TYPES = { text: "TEXT", integer: "INTEGER", real: "REAL", json: "TEXT" } as const;
-
 function loadDriver(): typeof DatabaseType {
   const require = createRequire(import.meta.url);
   try {
@@ -42,13 +41,6 @@ function loadDriver(): typeof DatabaseType {
 }
 
 const COLUMN_NAMES = Object.keys(spanColumns);
-
-function columnDdl(name: string, spec: ColumnSpec): string {
-  const parts = [name, SQLITE_TYPES[spec.type]];
-  if (spec.primary) parts.push("PRIMARY KEY");
-  if (!spec.nullable && !spec.primary) parts.push("NOT NULL");
-  return parts.join(" ");
-}
 
 /**
  * SQLite adapter. Pass a file path (created if missing) or an existing
@@ -64,51 +56,40 @@ export function sqlite(fileOrDb: string | DatabaseType.Database): DatabaseAdapte
     db = fileOrDb;
   }
 
+  const tableExists = (name: string) =>
+    !!db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(name);
+
+  function inspect(): SchemaState {
+    const spansExists = tableExists(SPANS_TABLE);
+    return {
+      spansExists,
+      spansColumns: new Set(
+        spansExists
+          ? (db.prepare(`PRAGMA table_info(${SPANS_TABLE})`).all() as { name: string }[]).map((c) => c.name)
+          : []
+      ),
+      indexNames: new Set(
+        (
+          db
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = ?")
+            .all(SPANS_TABLE) as { name: string }[]
+        ).map((r) => r.name)
+      ),
+      metaExists: tableExists(META_TABLE),
+    };
+  }
+
   return {
     id: "sqlite",
 
+    async inspectSchema() {
+      return inspect();
+    },
+
     async migrate() {
-      const createdTables: string[] = [];
-      const addedColumns: string[] = [];
-
-      const exists = db
-        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
-        .get(SPANS_TABLE);
-
-      if (!exists) {
-        const cols = Object.entries(spanColumns)
-          .map(([name, spec]) => columnDdl(name, spec))
-          .join(", ");
-        db.exec(`CREATE TABLE ${SPANS_TABLE} (${cols})`);
-        createdTables.push(SPANS_TABLE);
-      } else {
-        const existing = new Set(
-          (db.prepare(`PRAGMA table_info(${SPANS_TABLE})`).all() as { name: string }[]).map(
-            (c) => c.name
-          )
-        );
-        for (const [name, spec] of Object.entries(spanColumns)) {
-          if (existing.has(name)) continue;
-          // ALTER TABLE can't add NOT NULL without default — additive columns are nullable.
-          db.exec(`ALTER TABLE ${SPANS_TABLE} ADD COLUMN ${name} ${SQLITE_TYPES[spec.type]}`);
-          addedColumns.push(`${SPANS_TABLE}.${name}`);
-        }
-      }
-
-      for (const idx of spanIndexes) {
-        db.exec(
-          `CREATE INDEX IF NOT EXISTS ${idx.name} ON ${SPANS_TABLE} (${idx.columns.join(", ")})`
-        );
-      }
-
-      const metaExists = db
-        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
-        .get(META_TABLE);
-      if (!metaExists) {
-        db.exec(`CREATE TABLE ${META_TABLE} (key TEXT PRIMARY KEY, value INTEGER NOT NULL)`);
-        createdTables.push(META_TABLE);
-      }
-      return { createdTables, addedColumns };
+      const plan = planMigration("sqlite", inspect());
+      for (const stmt of plan.statements) db.exec(stmt);
+      return { createdTables: plan.createdTables, addedColumns: plan.addedColumns };
     },
 
     async claimSweep(now, intervalMs) {

@@ -1,0 +1,57 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: Introduction
+description: Breadcrumb is embeddable LLM tracing for TypeScript apps — your database, your deployment, your UI.
+---
+
+# Introduction
+
+Breadcrumb is embeddable LLM tracing for TypeScript apps. Instead of sending
+your prompts and traces to a third-party platform, you mount Breadcrumb inside
+your own backend: it writes traces to your database, runs its own migrations,
+and serves a dashboard from your app.
+
+This page explains the mental model. The [Quickstart](/docs/quickstart/) gets you
+to a first trace in a few minutes.
+
+## The mental model
+
+You create one instance and pass it your database. If you've used Better Auth,
+the shape is familiar.
+
+```ts
+import { breadcrumb } from "@breadcrumb-sh/core";
+import { postgres } from "@breadcrumb-sh/core/adapters";
+
+export const bc = breadcrumb({
+  database: postgres(process.env.DATABASE_URL!),
+  basePath: "/admin/traces",
+});
+```
+
+The `bc` instance gives you four things:
+
+- `bc.handler` mounts at `basePath` and serves the dashboard plus a JSON API.
+- `bc.telemetry()` plugs into the Vercel AI SDK's `experimental_telemetry`.
+- `bc.trace()` traces anything else manually.
+- `bc.api` runs typed, server-side queries over your traces, for building your
+  own UI.
+
+## What you get
+
+- **Your database.** Traces are stored in your own Postgres, or SQLite in
+  development, through additive-only migrations. Nothing leaves your
+  infrastructure.
+- **Your UI.** Serve the built-in dashboard, or build your own with the typed
+  client, React hooks, and headless kit — the data is already in your database.
+- **Drop-in tracing.** Instrument the Vercel AI SDK with one line, accept
+  OpenTelemetry over HTTP, or trace manually.
+- **Cost and tokens.** Per-call cost from your own price table, including
+  cache-read, cache-write, and reasoning tokens.
+
+## Next steps
+
+- [Quickstart](/docs/quickstart/): install, mount, and capture a trace.
+- [Frameworks](/docs/frameworks/): mount the handler in Next.js, Hono, or Node.
+- [Local development](/docs/local-development/) and
+  [Production](/docs/production/): how the setup differs between the two.

@@ -10,7 +10,10 @@ export function toNodeHandler(input: Breadcrumb | Handler) {
 
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const host = req.headers.host ?? "localhost";
-    const url = `http://${host}${req.url ?? "/"}`;
+    // Express/Connect rewrite req.url to the post-mount remainder under
+    // app.use(path, …); originalUrl keeps the full path so basePath still matches.
+    const path = (req as { originalUrl?: string }).originalUrl ?? req.url ?? "/";
+    const url = `http://${host}${path}`;
     const method = req.method ?? "GET";
 
     const headers = new Headers();

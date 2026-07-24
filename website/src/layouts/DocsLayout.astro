@@ -1,0 +1,126 @@
+---
+import Layout from "./Layout.astro";
+import Logo from "../components/Logo.astro";
+import DocsNav from "../components/DocsNav.astro";
+
+const { frontmatter } = Astro.props;
+const title = frontmatter?.title ? `${frontmatter.title} · Breadcrumb docs` : "Breadcrumb docs";
+const description = frontmatter?.description ?? "Documentation for Breadcrumb — embeddable LLM tracing you own.";
+
+// Raw MDX sources, loaded at build time, so "Copy page" hands over real Markdown
+// (frontmatter stripped) instead of rendered HTML.
+const sources = import.meta.glob("/src/pages/docs/**/*.mdx", {
+	query: "?raw",
+	import: "default",
+	eager: true,
+}) as Record<string, string>;
+const pathname = Astro.url.pathname.replace(/\/$/, "") + "/";
+const slug = pathname === "/docs/" ? "index" : pathname.replace(/^\/docs\/|\/$/g, "");
+const rawMarkdown = (sources[`/src/pages/docs/${slug}.mdx`] ?? "").replace(
+	/^---\r?\n[\s\S]*?\r?\n---\r?\n+/,
+	"",
+);
+---
+
+<Layout title={title} description={description}>
+	<div class="min-h-screen">
+		<header class="sticky top-0 z-20 bg-bg/80 backdrop-blur-md">
+			<div class="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
+				<a href="/" class="flex items-center gap-2 text-fg hover:opacity-80 transition-opacity">
+					<Logo class="h-[22px] w-[22px]" />
+					<span class="text-lg font-medium tracking-tight">breadcrumb</span>
+				</a>
+				<div class="flex items-center gap-1">
+					<a
+						href="https://github.com/breadcrumb-sh/breadcrumb"
+						target="_blank"
+						rel="noreferrer"
+						class="flex h-8 w-8 items-center justify-center rounded-sm text-fg-muted hover:text-fg transition-colors"
+					>
+						<i class="ph ph-github-logo"></i>
+					</a>
+					<button
+						id="nav-toggle"
+						type="button"
+						aria-label="Toggle navigation"
+						class="md:hidden flex h-8 w-8 items-center justify-center rounded-sm text-fg-muted hover:text-fg transition-colors cursor-pointer"
+					>
+						<i class="ph ph-list text-lg"></i>
+					</button>
+				</div>
+			</div>
+		</header>
+
+		<div id="mobile-nav" class="hidden md:hidden fixed inset-0 z-40 bg-bg overflow-y-auto flex-col">
+			<div class="flex h-14 shrink-0 items-center justify-between px-6">
+				<span class="flex items-center gap-2 text-fg">
+					<Logo class="h-[22px] w-[22px]" />
+					<span class="text-lg font-medium tracking-tight">breadcrumb</span>
+				</span>
+				<button
+					id="nav-close"
+					type="button"
+					aria-label="Close navigation"
+					class="flex h-8 w-8 items-center justify-center rounded-sm text-fg-muted hover:text-fg transition-colors cursor-pointer"
+				>
+					<i class="ph ph-x text-lg"></i>
+				</button>
+			</div>
+			<nav class="flex flex-col gap-7 px-6 pb-10">
+				<DocsNav />
+			</nav>
+		</div>
+
+		<div class="mx-auto flex max-w-6xl gap-12 px-6">
+			<aside class="hidden md:block w-56 shrink-0">
+				<nav class="sticky top-14 max-h-[calc(100vh-3.5rem)] overflow-y-auto py-10 pr-2 flex flex-col gap-7">
+					<DocsNav />
+				</nav>
+			</aside>
+
+			<main class="min-w-0 flex-1 py-10 md:py-14">
+				{
+					rawMarkdown && (
+						<div class="max-w-2xl flex justify-end">
+							<button
+								id="copy-page"
+								type="button"
+								data-md={rawMarkdown}
+								class="group inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-xs text-fg-subtle ring-[1px] ring-border hover:text-fg hover:ring-border-strong transition-colors cursor-pointer"
+							>
+								<i class="ph ph-copy" />
+								<span>Copy page</span>
+							</button>
+						</div>
+					)
+				}
+				<article class="docs-content mt-4 max-w-2xl">
+					<slot />
+				</article>
+			</main>
+		</div>
+	</div>
+</Layout>
+
+<script>
+	const copyPage = document.getElementById("copy-page");
+	const copyLabel = copyPage?.querySelector("span");
+	copyPage?.addEventListener("click", async () => {
+		try {
+			await navigator.clipboard.writeText(copyPage.dataset.md ?? "");
+			if (copyLabel) copyLabel.textContent = "Copied";
+			setTimeout(() => {
+				if (copyLabel) copyLabel.textContent = "Copy page";
+			}, 1500);
+		} catch {}
+	});
+
+	const mobileNav = document.getElementById("mobile-nav");
+	const setNav = (open: boolean) => {
+		mobileNav?.classList.toggle("hidden", !open);
+		mobileNav?.classList.toggle("flex", open);
+		document.body.style.overflow = open ? "hidden" : "";
+	};
+	document.getElementById("nav-toggle")?.addEventListener("click", () => setNav(true));
+	document.getElementById("nav-close")?.addEventListener("click", () => setNav(false));
+</script>

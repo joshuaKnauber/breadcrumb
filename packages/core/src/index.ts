@@ -71,6 +71,12 @@ export interface BreadcrumbOptions {
    * (or `waitUntil(bc.flush())`) before a serverless function returns.
    */
   flushMode?: "batch" | "sync";
+  /**
+   * "auto" (default): create/upgrade the schema on first use — great for local
+   * development. "manual": never run DDL at runtime; you own migrations, applied
+   * with `breadcrumb migrate` or `breadcrumb generate` plus your tooling.
+   */
+  migrations?: "auto" | "manual";
 }
 
 export interface Breadcrumb {
@@ -117,9 +123,12 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
   const redact = options.redact;
   const maxPayloadChars = options.maxPayloadChars ?? 16384;
 
-  // Lazy one-time migrate before the first DB operation.
+  // Lazy one-time migrate before the first DB operation, unless the app owns
+  // migrations ("manual") — then no DDL ever runs at runtime.
+  const autoMigrate = (options.migrations ?? "auto") === "auto";
   let readyPromise: Promise<void> | null = null;
-  const ready = () => (readyPromise ??= adapter.migrate().then(() => undefined));
+  const ready = () =>
+    (readyPromise ??= autoMigrate ? adapter.migrate().then(() => undefined) : Promise.resolve());
 
   const sweeper = createSweeper(adapter, options.retention);
 
@@ -227,5 +236,6 @@ export type { Pricing, PricingTable, ModelPrice } from "./pricing.js";
 export type { SpanAttrs, SpanContext, TraceAttrs, TraceFn } from "./trace.js";
 export type { TelemetryOptions, TelemetrySettings } from "./otel/pipeline.js";
 export type { RetentionOptions } from "./retention.js";
-export type { MigrationResult, RetentionRule } from "./db/types.js";
+export type { MigrationResult, MigrationPlan, SchemaState, Dialect, RetentionRule } from "./db/types.js";
 export type { AuthorizeFn } from "./router.js";
+export { planMigration, renderMigrationSql, EMPTY_SCHEMA_STATE } from "./db/ddl.js";

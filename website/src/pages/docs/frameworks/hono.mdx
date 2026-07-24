@@ -1,0 +1,29 @@
+---
+layout: ../../../layouts/DocsLayout.astro
+title: Hono
+description: Mount Breadcrumb in a Hono app.
+---
+
+# Hono
+
+Hono hands you the raw web `Request` at `c.req.raw`, which is exactly what the
+handler wants. Mount two routes so both the base path and everything under it
+match:
+
+```ts
+import { Hono } from "hono";
+import { bc } from "./breadcrumb";
+
+const app = new Hono();
+
+app.all("/admin/traces", (c) => bc.handler(c.req.raw));
+app.all("/admin/traces/*", (c) => bc.handler(c.req.raw));
+```
+
+The first route matches `/admin/traces` exactly; the second matches everything
+beneath it. Both return the handler's `Response` directly.
+
+## Next steps
+
+- [Database & migrations](/docs/database/): choose an adapter.
+- [Instrumenting](/docs/instrumenting/): capture your first trace.

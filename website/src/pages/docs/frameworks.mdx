@@ -1,0 +1,53 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: Frameworks
+description: Mount the Breadcrumb handler in your framework — the fetch-native handler works everywhere.
+---
+
+# Frameworks
+
+Breadcrumb's handler is a single fetch-native function — it takes a `Request`
+and returns a `Response`. You mount it as a catch-all at your `basePath` so it
+receives every method and sub-path underneath. Pick your framework below for the
+exact setup.
+
+- [Next.js](/docs/frameworks/nextjs/)
+- [Hono](/docs/frameworks/hono/)
+- [Node & Express](/docs/frameworks/node/)
+- [Other frameworks](/docs/frameworks/other/) (SvelteKit, Bun, Astro, Workers)
+
+{/* prettier-ignore */}
+> [!IMPORTANT]
+> The route you mount at must match the `basePath` you passed to `breadcrumb()`.
+> Every example uses `/admin/traces`.
+
+## The shared instance
+
+Each guide imports one instance you create once and reuse:
+
+```ts
+// lib/breadcrumb.ts
+import { breadcrumb } from "@breadcrumb-sh/core";
+import { postgres } from "@breadcrumb-sh/core/adapters";
+
+export const bc = breadcrumb({
+  database: postgres(process.env.DATABASE_URL!),
+  basePath: "/admin/traces",
+  authorize: (req) => isAdmin(req),
+});
+```
+
+## Protecting the dashboard
+
+The dashboard and query routes are unauthenticated by default. Guard them with
+the `authorize` option — it runs on every dashboard and query request, but not
+on ingest routes, which use an API key instead:
+
+```ts
+breadcrumb({
+  authorize: (req) => isAdmin(req), // true to allow, false for 401, or a Response
+});
+```
+
+You can also wrap the mount in your framework's own auth middleware. See
+[Production](/docs/production/) for the full checklist.

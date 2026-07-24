@@ -1,0 +1,26 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: Instrumenting
+description: The three ways spans reach Breadcrumb — AI SDK telemetry, manual tracing, and OpenTelemetry ingest.
+---
+
+# Instrumenting
+
+Spans reach Breadcrumb three ways. They all normalize into the same trace model,
+so you can mix them freely in one app. Pick the method that fits what you're
+tracing.
+
+- [Vercel AI SDK](/docs/instrumenting/ai-sdk/) — one line on your
+  `generateText` / `streamText` calls.
+- [Manual tracing](/docs/instrumenting/manual/) — wrap any code in
+  `bc.trace()` and nest spans.
+- [OpenTelemetry](/docs/instrumenting/opentelemetry/) — ingest traces over HTTP
+  from other services.
+
+The AI SDK and manual APIs compose: calls made inside a `bc.trace()` callback
+nest into that trace automatically.
+
+## Next steps
+
+- [Cost & tokens](/docs/cost/): declare prices and track spend.
+- [Querying your data](/docs/querying/): build a UI over what you capture.

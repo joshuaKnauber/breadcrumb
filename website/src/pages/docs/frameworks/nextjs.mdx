@@ -1,0 +1,32 @@
+---
+layout: ../../../layouts/DocsLayout.astro
+title: Next.js
+description: Mount Breadcrumb in a Next.js App Router route.
+---
+
+# Next.js
+
+Mount Breadcrumb with the App Router using an optional catch-all segment. The
+folder path matches your `basePath`, so the dashboard renders there and the JSON
+API lives underneath.
+
+Create `app/admin/traces/[[...breadcrumb]]/route.ts`:
+
+```ts
+import { toNextHandler } from "@breadcrumb-sh/core/next";
+import { bc } from "@/lib/breadcrumb";
+
+export const { GET, POST } = toNextHandler(bc);
+```
+
+That's the whole integration. Open `/admin/traces` to see the dashboard.
+
+{/* prettier-ignore */}
+> [!TIP]
+> On serverless (including Vercel), flush spans before the function returns so
+> none are lost when the runtime freezes. See [Production](/docs/production/).
+
+## Next steps
+
+- [Database & migrations](/docs/database/): choose an adapter.
+- [Instrumenting](/docs/instrumenting/): capture your first trace.

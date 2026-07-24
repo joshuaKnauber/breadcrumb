@@ -1,0 +1,48 @@
+---
+layout: ../../../layouts/DocsLayout.astro
+title: Node & Express
+description: Mount Breadcrumb on a raw Node server or with Express and Connect.
+---
+
+# Node & Express
+
+Use `toNodeHandler` to bridge a Node request/response pair to the fetch-native
+handler.
+
+## Express and Connect
+
+Mount the handler with `app.use`. Breadcrumb reads the original request URL, so
+the mount path is preserved:
+
+```ts
+import express from "express";
+import { toNodeHandler } from "@breadcrumb-sh/core/node";
+import { bc } from "./breadcrumb";
+
+const app = express();
+app.use("/admin/traces", toNodeHandler(bc));
+```
+
+Put your own auth middleware before this line, or use the `authorize` option.
+
+## Raw node:http
+
+On a bare `node:http` server, match the path yourself and pass matching requests
+to the handler:
+
+```ts
+import { createServer } from "node:http";
+import { toNodeHandler } from "@breadcrumb-sh/core/node";
+import { bc } from "./breadcrumb";
+
+const handler = toNodeHandler(bc);
+createServer((req, res) => {
+  if (req.url?.startsWith("/admin/traces")) return handler(req, res);
+  // …the rest of your app
+}).listen(3000);
+```
+
+## Next steps
+
+- [Database & migrations](/docs/database/): choose an adapter.
+- [Instrumenting](/docs/instrumenting/): capture your first trace.

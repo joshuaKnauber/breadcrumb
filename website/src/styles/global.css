@@ -1,0 +1,232 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-bg: #0d0d0d;
+  --color-bg-elevated: #17181a;
+  --color-bg-muted: #1d1f22;
+  --color-surface: #25282c;
+
+  --color-border: #2a2d31;
+  --color-border-strong: #3a3e44;
+
+  --color-fg: #e4e4e7;
+  --color-fg-muted: #a1a1aa;
+  --color-fg-subtle: #71717a;
+  --color-fg-faint: #52525b;
+
+  /* Breadcrumb's trail — a warm tan, used sparingly. */
+  --color-accent: #c4b5a0;
+  --color-accent-muted: #8a7e6c;
+}
+
+:root {
+  color-scheme: dark;
+  isolation: isolate;
+}
+
+html,
+body {
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+}
+
+html {
+  overflow-x: clip;
+  scroll-behavior: smooth;
+}
+
+/* Shiki blocks (astro <Code> + fenced MDX): neutral panel, mono, no theme bg. */
+.astro-code {
+  position: relative;
+  background-color: var(--color-bg) !important;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  font-size: 0.82rem;
+  line-height: 1.65;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+}
+
+/* Per-snippet copy button, injected by the global script. */
+.copy-code {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 4px;
+  color: var(--color-fg-subtle);
+  background: color-mix(in oklab, var(--color-bg-elevated) 85%, transparent);
+  border: 1px solid var(--color-border);
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+}
+.astro-code:hover .copy-code,
+.copy-code:focus-visible {
+  opacity: 1;
+}
+.copy-code:hover {
+  color: var(--color-fg);
+}
+.copy-code.copied {
+  color: var(--color-accent);
+  opacity: 1;
+}
+
+/* Docs prose */
+.docs-content {
+  color: var(--color-fg-muted);
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+.docs-content > :first-child {
+  margin-top: 0;
+}
+.docs-content h1 {
+  color: var(--color-fg);
+  font-size: 2rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0 0 1rem;
+}
+.docs-content h2 {
+  color: var(--color-fg);
+  font-size: 1.25rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  margin: 3rem 0 1rem;
+}
+.docs-content h3 {
+  color: var(--color-fg);
+  font-size: 1rem;
+  font-weight: 500;
+  margin: 2rem 0 0.5rem;
+}
+.docs-content p {
+  margin: 1rem 0;
+}
+.docs-content a {
+  color: var(--color-fg);
+  text-decoration: underline;
+  text-decoration-color: var(--color-border-strong);
+  text-underline-offset: 3px;
+}
+.docs-content a:hover {
+  text-decoration-color: var(--color-fg-muted);
+}
+.docs-content strong {
+  color: var(--color-fg);
+  font-weight: 500;
+}
+.docs-content ul,
+.docs-content ol {
+  margin: 1rem 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.docs-content ul {
+  list-style: disc;
+}
+.docs-content ol {
+  list-style: decimal;
+}
+.docs-content li::marker {
+  color: var(--color-fg-faint);
+}
+.docs-content :not(pre) > code {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  background: var(--color-bg-muted);
+  color: var(--color-fg);
+  padding: 0.15em 0.4em;
+  border-radius: 3px;
+}
+.docs-content pre {
+  margin: 1.5rem 0;
+}
+.docs-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  font-size: 0.875rem;
+}
+.docs-content th,
+.docs-content td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.5rem 1rem 0.5rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.docs-content th {
+  color: var(--color-fg);
+  font-weight: 500;
+  border-bottom-color: var(--color-border-strong);
+}
+.docs-content hr {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  margin: 2.5rem 0;
+}
+.docs-content blockquote {
+  border-left: 2px solid var(--color-border-strong);
+  padding-left: 1rem;
+  margin: 1.5rem 0;
+  color: var(--color-fg-subtle);
+}
+
+/* GitHub-style callouts (remark-github-blockquote-alert). */
+.docs-content .markdown-alert {
+  margin: 1.5rem 0;
+  padding: 0.85rem 1rem;
+  border-left: 2px solid var(--alert, var(--color-border-strong));
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--alert, #888) 8%, transparent);
+}
+.docs-content .markdown-alert > :first-child {
+  margin-top: 0;
+}
+.docs-content .markdown-alert > :last-child {
+  margin-bottom: 0;
+}
+.docs-content .markdown-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--alert, var(--color-fg-muted));
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.35rem;
+}
+.docs-content .markdown-alert-title svg {
+  width: 1em;
+  height: 1em;
+  fill: currentColor;
+}
+.docs-content .markdown-alert-note {
+  --alert: #8a93a3;
+}
+.docs-content .markdown-alert-tip {
+  --alert: #6cc58a;
+}
+.docs-content .markdown-alert-important {
+  --alert: #c4b5a0;
+}
+.docs-content .markdown-alert-warning {
+  --alert: #d0a85f;
+}
+.docs-content .markdown-alert-caution {
+  --alert: #e0654f;
+}

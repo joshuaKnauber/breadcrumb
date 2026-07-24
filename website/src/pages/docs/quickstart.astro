@@ -1,0 +1,419 @@
+---
+import DocsLayout from "../../layouts/DocsLayout.astro";
+import { Code } from "astro:components";
+
+const groups = [
+	{
+		axis: "framework",
+		label: "Framework",
+		options: [
+			["next", "Next.js"],
+			["hono", "Hono"],
+			["node", "Node & Express"],
+			["other", "Other"],
+		],
+	},
+	{
+		axis: "database",
+		label: "Database",
+		options: [
+			["postgres", "Postgres"],
+			["sqlite", "SQLite"],
+		],
+	},
+	{
+		axis: "tracing",
+		label: "Instrument with",
+		options: [
+			["ai-sdk", "Vercel AI SDK"],
+			["manual", "Manual tracing"],
+		],
+	},
+] as const;
+
+const installPostgres = "npm i @breadcrumb-sh/core pg";
+const installSqlite = "npm i @breadcrumb-sh/core better-sqlite3";
+
+const instancePostgres = `// lib/breadcrumb.ts
+import { breadcrumb } from "@breadcrumb-sh/core";
+import { postgres } from "@breadcrumb-sh/core/adapters";
+
+export const bc = breadcrumb({
+  database: postgres(process.env.DATABASE_URL!),
+  basePath: "/admin/traces",
+  authorize: (req) => isAdmin(req),
+});`;
+
+const instanceSqlite = `// lib/breadcrumb.ts
+import { breadcrumb } from "@breadcrumb-sh/core";
+import { sqlite } from "@breadcrumb-sh/core/adapters";
+
+export const bc = breadcrumb({
+  database: sqlite(".breadcrumb/dev.db"),
+  basePath: "/admin/traces",
+});`;
+
+const mountNext = `// app/admin/traces/[[...breadcrumb]]/route.ts
+import { toNextHandler } from "@breadcrumb-sh/core/next";
+import { bc } from "@/lib/breadcrumb";
+
+export const { GET, POST } = toNextHandler(bc);`;
+
+const mountHono = `import { Hono } from "hono";
+import { bc } from "./breadcrumb";
+
+const app = new Hono();
+app.all("/admin/traces", (c) => bc.handler(c.req.raw));
+app.all("/admin/traces/*", (c) => bc.handler(c.req.raw));`;
+
+const mountNode = `import express from "express";
+import { toNodeHandler } from "@breadcrumb-sh/core/node";
+import { bc } from "./breadcrumb";
+
+const app = express();
+app.use("/admin/traces", toNodeHandler(bc));`;
+
+const mountOther = `// src/routes/admin/traces/[...path]/+server.ts  (SvelteKit)
+import { bc } from "$lib/breadcrumb";
+
+export const GET = ({ request }) => bc.handler(request);
+export const POST = ({ request }) => bc.handler(request);`;
+
+const traceAiSdk = `import { generateText } from "ai";
+
+const { text } = await generateText({
+  model: openai("gpt-5"),
+  prompt,
+  experimental_telemetry: bc.telemetry({ functionId: "generate-answer" }),
+});`;
+
+const traceManual = `await bc.trace("support-reply", { userId }, async (t) => {
+  t.set({ input: prompt });
+  const answer = await callModel(prompt);
+  t.set({ output: answer, model: "gpt-5", inputTokens, outputTokens });
+});`;
+
+const migratePostgres = "npx breadcrumb migrate --database $DATABASE_URL";
+
+const codeProps = { theme: "tokyo-night" as const };
+
+// Server-rendered default prompt (Next.js + Postgres + AI SDK), so the box is
+// filled before the script runs. The script rebuilds it as choices change.
+const SITE = "https://breadcrumb.sh";
+const defaultPrompt = `I'm adding Breadcrumb — embeddable LLM tracing that stores traces in my own database — to my Next.js app. I'll store traces in Postgres and instrument with the Vercel AI SDK.
+
+Relevant docs:
+- Quickstart: ${SITE}/docs/quickstart/
+- Mounting the handler (Next.js): ${SITE}/docs/frameworks/nextjs/
+- Database & adapters: ${SITE}/docs/database/
+- Migrations: ${SITE}/docs/migrations/
+- Instrumenting (the Vercel AI SDK): ${SITE}/docs/instrumenting/ai-sdk/
+- Configuration: ${SITE}/docs/configuration/
+
+Please help me set it up:
+1. Install @breadcrumb-sh/core and the pg driver.
+2. Create a shared bc instance in lib/breadcrumb.ts using the postgres() adapter with basePath "/admin/traces".
+3. Mount bc.handler at /admin/traces for Next.js.
+4. Instrument my LLM calls with the Vercel AI SDK.
+5. Add the authorize option to protect the dashboard before shipping.
+
+Good to know:
+- The schema is created automatically in development. For production, generate migration files with "npx breadcrumb generate --database $DATABASE_URL", commit them, and set migrations: "manual".
+- On serverless, call "await bc.flush()" (or waitUntil(bc.flush())) before the response returns so no spans are lost.`;
+---
+
+<DocsLayout
+	frontmatter={{
+		title: "Quickstart",
+		description:
+			"Pick your stack and get a tailored setup guide, plus a prompt to hand to your coding assistant.",
+	}}
+>
+	<h1>Quickstart</h1>
+	<p>
+		Choose your stack below. The steps update to match, and you get a prompt to
+		hand to your coding assistant — with the right docs links and guidance — so
+		it can wire Breadcrumb up for you.
+	</p>
+
+	<div class="picker not-prose">
+		{
+			groups.map((g) => (
+				<div class="picker-row">
+					<span class="picker-label">{g.label}</span>
+					<div class="seg" data-axis={g.axis}>
+						{g.options.map(([value, label], i) => (
+							<button
+								type="button"
+								data-group={g.axis}
+								data-value={value}
+								aria-selected={i === 0 ? "true" : "false"}
+							>
+								{label}
+							</button>
+						))}
+					</div>
+				</div>
+			))
+		}
+	</div>
+
+	<h2>Hand it to your assistant</h2>
+	<p>
+		Copy this into Claude Code, Cursor, or any coding assistant. It names your
+		stack, links the docs pages that matter, and lists what to do.
+	</p>
+	<div class="prompt-box not-prose">
+		<button id="copy-prompt" type="button" class="copy-prompt">
+			<i class="ph ph-copy"></i>
+			<span>Copy prompt</span>
+		</button>
+		<pre class="prompt-text"><code id="llm-prompt">{defaultPrompt}</code></pre>
+	</div>
+
+	<h2>1. Install</h2>
+	<p>Install the core package and the driver for your database.</p>
+	<div data-slot data-axis="database">
+		<div data-variant="postgres"><Code code={installPostgres} lang="bash" {...codeProps} /></div>
+		<div data-variant="sqlite" hidden><Code code={installSqlite} lang="bash" {...codeProps} /></div>
+	</div>
+
+	<h2>2. Create the instance</h2>
+	<p>Create one instance and export it, pointed at your database.</p>
+	<div data-slot data-axis="database">
+		<div data-variant="postgres"><Code code={instancePostgres} lang="ts" {...codeProps} /></div>
+		<div data-variant="sqlite" hidden><Code code={instanceSqlite} lang="ts" {...codeProps} /></div>
+	</div>
+
+	<h2>3. Set up the schema</h2>
+	<div data-slot data-axis="database">
+		<div data-variant="sqlite">
+			<p>
+				Breadcrumb creates its tables automatically on first use, so in development
+				there's nothing to run. When you deploy to Postgres, generate a migration —
+				see <a href="/docs/migrations/">Migrations</a>.
+			</p>
+		</div>
+		<div data-variant="postgres" hidden>
+			<p>Apply the schema to your database:</p>
+			<Code code={migratePostgres} lang="bash" {...codeProps} />
+			<p>
+				It's also created automatically on first use. For production, generate
+				migration files you commit and set <code>migrations: "manual"</code> — see{" "}
+				<a href="/docs/migrations/">Migrations</a>.
+			</p>
+		</div>
+	</div>
+
+	<h2>4. Mount the handler</h2>
+	<p>Mount <code>bc</code> as a catch-all at your <code>basePath</code>.</p>
+	<div data-slot data-axis="framework">
+		<div data-variant="next"><Code code={mountNext} lang="ts" {...codeProps} /></div>
+		<div data-variant="hono" hidden><Code code={mountHono} lang="ts" {...codeProps} /></div>
+		<div data-variant="node" hidden><Code code={mountNode} lang="ts" {...codeProps} /></div>
+		<div data-variant="other" hidden><Code code={mountOther} lang="ts" {...codeProps} /></div>
+	</div>
+
+	<h2>5. Instrument</h2>
+	<p>Capture a trace from your LLM calls.</p>
+	<div data-slot data-axis="tracing">
+		<div data-variant="ai-sdk"><Code code={traceAiSdk} lang="ts" {...codeProps} /></div>
+		<div data-variant="manual" hidden><Code code={traceManual} lang="ts" {...codeProps} /></div>
+	</div>
+
+	<p>
+		Run your app, trigger the code, and open <code>/admin/traces</code>. Your
+		run is there, with each step nested underneath.
+	</p>
+
+	<h2>Next steps</h2>
+	<ul>
+		<li><a href="/docs/frameworks/">Frameworks</a>: more detail on mounting.</li>
+		<li>
+			<a href="/docs/local-development/">Local development</a> and{" "}
+			<a href="/docs/production/">Production</a>: how the setup differs.
+		</li>
+		<li><a href="/docs/migrations/">Migrations</a>: how the schema is created.</li>
+	</ul>
+</DocsLayout>
+
+<style>
+	.picker {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		margin: 1.5rem 0;
+	}
+	.picker-row {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		flex-wrap: wrap;
+	}
+	.picker-label {
+		width: 7rem;
+		flex-shrink: 0;
+		font-size: 0.8rem;
+		color: var(--color-fg-subtle);
+	}
+	.seg {
+		display: flex;
+		gap: 0.2rem;
+		padding: 0.2rem;
+		border: 1px solid var(--color-border);
+		border-radius: 6px;
+		width: fit-content;
+		flex-wrap: wrap;
+	}
+	.seg button {
+		padding: 0.3rem 0.7rem;
+		border-radius: 4px;
+		font-size: 0.8rem;
+		color: var(--color-fg-muted);
+		cursor: pointer;
+		transition:
+			background 0.15s ease,
+			color 0.15s ease;
+	}
+	.seg button:hover {
+		color: var(--color-fg);
+	}
+	.seg button[aria-selected="true"] {
+		background: var(--color-bg-muted);
+		color: var(--color-fg);
+	}
+	.prompt-box {
+		position: relative;
+		margin: 1.25rem 0;
+	}
+	.prompt-text {
+		margin: 0;
+		padding: 1rem 1.25rem;
+		background: var(--color-bg-elevated);
+		border: 1px solid var(--color-border);
+		border-radius: 6px;
+		overflow-x: auto;
+		max-height: 22rem;
+		overflow-y: auto;
+	}
+	.prompt-text code {
+		font-family: var(--font-mono);
+		font-size: 0.78rem;
+		line-height: 1.6;
+		color: var(--color-fg-muted);
+		white-space: pre-wrap;
+		background: none;
+		padding: 0;
+	}
+	.copy-prompt {
+		position: absolute;
+		top: 0.6rem;
+		right: 0.6rem;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.3rem 0.6rem;
+		font-size: 0.75rem;
+		border-radius: 4px;
+		color: var(--color-fg-subtle);
+		background: var(--color-bg-muted);
+		border: 1px solid var(--color-border);
+		cursor: pointer;
+		transition: color 0.15s ease;
+	}
+	.copy-prompt:hover {
+		color: var(--color-fg);
+	}
+	.copy-prompt.copied {
+		color: var(--color-accent);
+	}
+</style>
+
+<script>
+	const SITE = "https://breadcrumb.sh";
+
+	const FRAMEWORKS: Record<string, { label: string; slug: string }> = {
+		next: { label: "Next.js", slug: "nextjs" },
+		hono: { label: "Hono", slug: "hono" },
+		node: { label: "Node & Express", slug: "node" },
+		other: { label: "another framework", slug: "other" },
+	};
+	const DATABASES: Record<string, { label: string; driver: string; adapter: string }> = {
+		postgres: { label: "Postgres", driver: "pg", adapter: "postgres" },
+		sqlite: { label: "SQLite", driver: "better-sqlite3", adapter: "sqlite" },
+	};
+	const TRACING: Record<string, { label: string; slug: string }> = {
+		"ai-sdk": { label: "the Vercel AI SDK", slug: "ai-sdk" },
+		manual: { label: "manual tracing", slug: "manual" },
+	};
+
+	const state: Record<string, string> = {
+		framework: "next",
+		database: "postgres",
+		tracing: "ai-sdk",
+	};
+
+	function buildPrompt(): string {
+		const fw = FRAMEWORKS[state.framework]!;
+		const db = DATABASES[state.database]!;
+		const tr = TRACING[state.tracing]!;
+		return `I'm adding Breadcrumb — embeddable LLM tracing that stores traces in my own database — to my ${fw.label} app. I'll store traces in ${db.label} and instrument with ${tr.label}.
+
+Relevant docs:
+- Quickstart: ${SITE}/docs/quickstart/
+- Mounting the handler (${fw.label}): ${SITE}/docs/frameworks/${fw.slug}/
+- Database & adapters: ${SITE}/docs/database/
+- Migrations: ${SITE}/docs/migrations/
+- Instrumenting (${tr.label}): ${SITE}/docs/instrumenting/${tr.slug}/
+- Configuration: ${SITE}/docs/configuration/
+
+Please help me set it up:
+1. Install @breadcrumb-sh/core and the ${db.driver} driver.
+2. Create a shared bc instance in lib/breadcrumb.ts using the ${db.adapter}() adapter with basePath "/admin/traces".
+3. Mount bc.handler at /admin/traces for ${fw.label}.
+4. Instrument my LLM calls with ${tr.label}.
+5. Add the authorize option to protect the dashboard before shipping.
+
+Good to know:
+- The schema is created automatically in development. For production, generate migration files with "npx breadcrumb generate --database $DATABASE_URL", commit them, and set migrations: "manual".
+- On serverless, call "await bc.flush()" (or waitUntil(bc.flush())) before the response returns so no spans are lost.`;
+	}
+
+	const promptEl = document.getElementById("llm-prompt");
+
+	function render() {
+		for (const slot of document.querySelectorAll<HTMLElement>("[data-slot]")) {
+			const axis = slot.dataset.axis!;
+			for (const variant of slot.querySelectorAll<HTMLElement>("[data-variant]")) {
+				variant.hidden = variant.dataset.variant !== state[axis];
+			}
+		}
+		for (const btn of document.querySelectorAll<HTMLButtonElement>("[data-group]")) {
+			btn.setAttribute("aria-selected", String(state[btn.dataset.group!] === btn.dataset.value));
+		}
+		if (promptEl) promptEl.textContent = buildPrompt();
+	}
+
+	for (const btn of document.querySelectorAll<HTMLButtonElement>("[data-group]")) {
+		btn.addEventListener("click", () => {
+			state[btn.dataset.group!] = btn.dataset.value!;
+			render();
+		});
+	}
+
+	const copyBtn = document.getElementById("copy-prompt");
+	const copyLabel = copyBtn?.querySelector("span");
+	copyBtn?.addEventListener("click", async () => {
+		try {
+			await navigator.clipboard.writeText(buildPrompt());
+			copyBtn.classList.add("copied");
+			if (copyLabel) copyLabel.textContent = "Copied";
+			setTimeout(() => {
+				copyBtn.classList.remove("copied");
+				if (copyLabel) copyLabel.textContent = "Copy prompt";
+			}, 1500);
+		} catch {}
+	});
+
+	render();
+</script>
