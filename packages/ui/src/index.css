@@ -5,19 +5,24 @@
 @import "@fontsource/geist-mono/latin-400.css";
 @import "@fontsource/geist-mono/latin-500.css";
 
+/*
+ * Structure comes from surface layers (bg → plate → panel → panel2), not
+ * borders: the sidebar sits on `bg`, content floats on a `plate`, and cards
+ * raise from there. `line` is a near-invisible hairline reserved for pane
+ * splits. The palette is true neutral gray — no hue. `accent` is just a
+ * brighter neutral for emphasis; red is the one exception, for errors only.
+ */
 @theme {
-  --color-bg: #1a1917;
-  --color-panel: #211f1d;
-  --color-panel2: #2a2825;
-  --color-line: #38352f;
-  --color-fg: #ecebe8;
-  --color-muted: #a4a09a;
-  --color-faint: #726e67;
-  --color-accent: #e8a33d;
-  --color-err: #e5645a;
-  --color-ok: #5bb98b;
-  --color-blue: #6fb3e0;
-  --color-purple: #b790e8;
+  --color-bg: #121212;
+  --color-plate: #191919;
+  --color-panel: #202020;
+  --color-panel2: #2a2a2a;
+  --color-line: #ffffff0d;
+  --color-fg: #ececec;
+  --color-muted: #989898;
+  --color-faint: #606060;
+  --color-accent: #d8d8d8;
+  --color-err: #cf6f68;
   --font-sans: "Instrument Sans", "Helvetica Neue", Arial, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
@@ -36,11 +41,11 @@ button {
   text-align: left;
 }
 
-button:focus-visible {
+button:focus-visible, select:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: var(--color-line); border-radius: 5px; border: 2px solid var(--color-bg); }
+::-webkit-scrollbar-thumb { background: #2f2f36; border-radius: 5px; border: 2px solid transparent; background-clip: padding-box; }
 ::-webkit-scrollbar-track { background: transparent; }

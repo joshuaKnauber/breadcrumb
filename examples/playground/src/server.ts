@@ -6,8 +6,8 @@
  */
 import { createServer } from "node:http";
 import { mkdirSync } from "node:fs";
-import { generateText } from "ai";
-import type { LanguageModelV2 } from "@ai-sdk/provider";
+import { streamText } from "ai";
+import type { LanguageModelV2, LanguageModelV2StreamPart } from "@ai-sdk/provider";
 import { breadcrumb } from "@breadcrumb-sh/core";
 import { sqlite } from "@breadcrumb-sh/core/adapters";
 import { toNodeHandler } from "@breadcrumb-sh/core/node";
@@ -22,29 +22,53 @@ const bc = breadcrumb({
   basePath: BASE_PATH,
   environment: "development",
   ingest: { apiKey: "playground" },
+  // The app declares its own model prices (USD per 1M tokens); breadcrumb
+  // computes cost from token usage. No prices are assumed by the library.
+  // cachedInput is the discounted cache-read rate (here 90% off).
+  pricing: { "gpt-5": { input: 1.25, output: 10, cachedInput: 0.125 } },
 });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// Offline mock model so the playground needs no API key.
+// Offline mock model so the playground needs no API key. Streams, because
+// the AI SDK v5 only reports cache/reasoning token detail on doStream spans.
 const model: LanguageModelV2 = {
   specificationVersion: "v2",
   provider: "openai",
   modelId: "gpt-5",
   supportedUrls: {},
   async doGenerate() {
-    await sleep(150 + Math.random() * 400);
-    const inputTokens = 80 + Math.floor(Math.random() * 200);
-    const outputTokens = 20 + Math.floor(Math.random() * 120);
-    return {
-      finishReason: "stop",
-      usage: { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
-      content: [{ type: "text", text: "Die Antwort auf deine Frage ist 42." }],
-      warnings: [],
-    };
+    throw new Error("the mock model only streams");
   },
   async doStream() {
-    throw new Error("streaming not supported by the mock model");
+    const text = "Die Antwort auf deine Frage ist 42.";
+    const inputTokens = 400 + Math.floor(Math.random() * 200);
+    const outputTokens = 20 + Math.floor(Math.random() * 120);
+    const stream = new ReadableStream<LanguageModelV2StreamPart>({
+      async start(controller) {
+        controller.enqueue({ type: "stream-start", warnings: [] });
+        controller.enqueue({ type: "text-start", id: "t" });
+        for (const word of text.split(" ")) {
+          await sleep(20 + Math.random() * 60);
+          controller.enqueue({ type: "text-delta", id: "t", delta: word + " " });
+        }
+        controller.enqueue({ type: "text-end", id: "t" });
+        controller.enqueue({
+          type: "finish",
+          finishReason: "stop",
+          usage: {
+            inputTokens,
+            outputTokens,
+            totalTokens: inputTokens + outputTokens,
+            // subsets: cache hits on the system prompt, thinking within output
+            cachedInputTokens: Math.random() < 0.7 ? 320 : 0,
+            reasoningTokens: Math.floor(outputTokens * 0.3),
+          },
+        });
+        controller.close();
+      },
+    });
+    return { stream };
   },
 };
 
@@ -73,7 +97,7 @@ async function runPipeline(opts: { fail?: boolean } = {}): Promise<string> {
       );
 
       // Nests under this trace automatically via OTel context propagation.
-      const { text } = await generateText({
+      const result = streamText({
         model,
         prompt: `Beantworte mit Kontext aus: ${docs.join(", ")}`,
         experimental_telemetry: bc.telemetry({
@@ -81,6 +105,7 @@ async function runPipeline(opts: { fail?: boolean } = {}): Promise<string> {
           metadata: { userId },
         }),
       });
+      const text = await result.text;
 
       await t.span("format-response", { kind: "tool" }, async (s) => {
         await sleep(20);

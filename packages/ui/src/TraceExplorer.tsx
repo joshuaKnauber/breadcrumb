@@ -4,13 +4,14 @@ import { api, fmtCost, fmtMs } from "./api.js";
 import type { SpanRecord } from "./types.js";
 import { asMessages, buildTree, errorPaths, type TreeNode } from "./tree.js";
 
+// One hue: model calls are what this tool traces, so only `llm` is tinted.
 const KIND_STYLES: Record<string, string> = {
-  llm: "text-accent bg-accent/10",
-  retrieval: "text-blue bg-blue/10",
-  tool: "text-purple bg-purple/10",
-  embedding: "text-blue bg-blue/10",
-  agent: "text-ok bg-ok/10",
-  span: "text-muted bg-panel2",
+  llm: "text-accent bg-accent/12",
+  retrieval: "text-muted bg-panel2",
+  tool: "text-muted bg-panel2",
+  embedding: "text-muted bg-panel2",
+  agent: "text-muted bg-panel2",
+  span: "text-faint bg-panel2",
   group: "text-faint bg-panel2",
 };
 
@@ -57,14 +58,14 @@ export function TraceExplorer({
 
   return (
     <aside className="flex w-[520px] flex-none flex-col overflow-hidden border-l border-line">
-      <div className="flex w-[520px] flex-none items-baseline gap-2.5 border-b border-line px-4 py-3">
+      <div className="flex w-[520px] flex-none items-baseline gap-2.5 px-4 pt-3.5 pb-2">
         <h2 className="font-semibold">{root?.name ?? "trace"}</h2>
-        <span className="font-mono text-[11px] text-muted">
+        <span className="font-mono text-[11px] text-faint">
           {spans.length} steps · {fmtMs(totalMs)}
         </span>
         <button
           onClick={onClose}
-          className="ml-auto rounded-[5px] border border-line px-2 py-0.5 font-mono text-xs text-faint hover:text-muted"
+          className="ml-auto rounded bg-panel px-2 py-0.5 font-mono text-xs text-faint hover:text-muted"
         >
           esc
         </button>
@@ -124,8 +125,8 @@ function Tree({
             <div key={key}>
               <button
                 onClick={() => onToggle(key)}
-                className="grid w-full grid-cols-[14px_62px_1fr_auto] items-center gap-2 rounded-[5px] px-1.5 py-1 text-[12.5px] hover:bg-panel"
-                style={{ marginLeft: depth * 14 }}
+                className="grid w-full grid-cols-[14px_62px_1fr_auto] items-center gap-2 rounded-[5px] py-1 pr-1.5 text-[12.5px] hover:bg-panel"
+                style={{ paddingLeft: 6 + depth * 14 }}
               >
                 <span className="text-center font-mono text-[10px] text-faint">{open ? "▾" : "▸"}</span>
                 <span className={`rounded px-1 py-0.5 text-center font-mono text-[9.5px] tracking-wide uppercase ${KIND_STYLES.group}`}>
@@ -220,10 +221,10 @@ function SpanRow({
         onSelect(span.id);
       }}
       aria-selected={selected}
-      className={`grid w-full grid-cols-[14px_62px_1fr_auto] items-center gap-2 rounded-[5px] px-1.5 py-1 text-[12.5px] ${
+      className={`grid w-full grid-cols-[14px_62px_1fr_auto] items-center gap-2 rounded-[5px] py-1 pr-1.5 text-[12.5px] ${
         selected ? "bg-panel2" : "hover:bg-panel"
       }`}
-      style={{ marginLeft: depth * 14 }}
+      style={{ paddingLeft: 6 + depth * 14 }}
     >
       <span className="text-center font-mono text-[10px] text-faint">{hasKids ? (open ? "▾" : "▸") : ""}</span>
       <span className={`rounded px-1 py-0.5 text-center font-mono text-[9.5px] tracking-wide uppercase ${KIND_STYLES[span.kind] ?? KIND_STYLES.span}`}>
@@ -241,9 +242,18 @@ function SpanRow({
 function SpanDetail({ span }: { span: SpanRecord }) {
   const [showRaw, setShowRaw] = useState(false);
   const messages = asMessages(span.input);
+  const cached = span.cachedInputTokens ?? 0;
+  const reasoning = span.reasoningTokens ?? 0;
+  const tokenParts = [cached > 0 && `${cached} cached`, reasoning > 0 && `${reasoning} reasoning`]
+    .filter(Boolean)
+    .join(", ");
+  const tokenStr =
+    span.inputTokens != null
+      ? `${span.inputTokens}→${span.outputTokens ?? 0} tok${tokenParts ? ` (${tokenParts})` : ""}`
+      : null;
   const stats = [
     span.model,
-    span.inputTokens != null ? `${span.inputTokens}→${span.outputTokens ?? 0} tok` : null,
+    tokenStr,
     span.cost != null ? fmtCost(span.cost) : null,
     span.endTime != null ? fmtMs(span.endTime - span.startTime) : null,
   ]
@@ -257,14 +267,16 @@ function SpanDetail({ span }: { span: SpanRecord }) {
         <span className="font-mono text-[11px] text-muted">{stats}</span>
         <button
           onClick={() => setShowRaw((v) => !v)}
-          className={`ml-auto rounded-[5px] border border-line px-2 py-0.5 font-mono text-[11px] ${showRaw ? "text-fg" : "text-faint"}`}
+          className={`ml-auto rounded px-2 py-0.5 font-mono text-[11px] ${
+            showRaw ? "bg-panel2 text-fg" : "bg-panel text-faint hover:text-muted"
+          }`}
         >
           raw
         </button>
       </div>
 
       {span.error && (
-        <div className="mb-2 rounded-lg border border-err/40 bg-err/10 px-3 py-2 font-mono text-xs text-err">
+        <div className="mb-2 rounded-md bg-err/10 px-3 py-2 font-mono text-xs text-err">
           ✗ {span.error}
         </div>
       )}
@@ -296,24 +308,22 @@ function SpanDetail({ span }: { span: SpanRecord }) {
 
 const ROLE_COLORS: Record<string, string> = {
   system: "text-faint",
-  user: "text-blue",
   assistant: "text-accent",
-  tool: "text-purple",
 };
 
 function Message({ role, text }: { role: string; text: string }) {
   const [open, setOpen] = useState(role !== "system");
   return (
-    <div className="mb-2 overflow-hidden rounded-lg border border-line">
+    <div className="mb-2 overflow-hidden rounded-md bg-panel">
       <button
         onClick={() => role === "system" && setOpen((v) => !v)}
-        className={`flex w-full bg-panel px-3 py-1.5 font-mono text-[10px] tracking-wider uppercase ${role === "system" ? "" : "cursor-default"}`}
+        className={`flex w-full px-3 pt-2 font-mono text-[10px] tracking-wider uppercase ${role === "system" ? "" : "cursor-default"}`}
       >
         <span className={ROLE_COLORS[role] ?? "text-muted"}>{role}</span>
         {role === "system" && <span className="ml-auto text-faint">{open ? "collapse" : "expand"}</span>}
       </button>
       <div
-        className={`px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap ${
+        className={`px-3 pt-1 pb-2.5 text-[13px] leading-relaxed whitespace-pre-wrap ${
           role === "system" ? `text-muted ${open ? "" : "max-h-[3.1em] overflow-hidden text-ellipsis"}` : ""
         }`}
       >
@@ -327,7 +337,7 @@ function Payload({ label, value }: { label: string; value: unknown }) {
   if (value === undefined || value === null) return null;
   return (
     <div className="mb-2 overflow-x-auto rounded-md bg-panel px-3 py-2 font-mono text-xs text-muted">
-      <b className="font-medium text-purple">{label}</b>{" "}
+      <b className="font-medium text-fg">{label}</b>{" "}
       <span className="whitespace-pre-wrap">{JSON.stringify(value, null, 1)}</span>
     </div>
   );

@@ -84,6 +84,101 @@ function collectMetadata(attrs: Attrs): Record<string, unknown> | null {
   return Object.keys(out).length > 0 ? out : null;
 }
 
+interface Usage {
+  inputTokens: number | null;
+  outputTokens: number | null;
+  cachedInputTokens: number | null;
+  cacheWriteTokens: number | null;
+  reasoningTokens: number | null;
+}
+
+const EMPTY_USAGE: Usage = {
+  inputTokens: null,
+  outputTokens: null,
+  cachedInputTokens: null,
+  cacheWriteTokens: null,
+  reasoningTokens: null,
+};
+
+/**
+ * The AI SDK mirrors usage onto wrapper spans (ai.generateText, ai.streamText,
+ * ...) as a last-step or aggregate copy. The per-model-call spans — the ".do*"
+ * operations (doGenerate/doStream/doEmbed) — are the only carriers that are
+ * both per-call and additive across multi-step tool loops, so usage is counted
+ * there and wrapper usage is ignored.
+ */
+function isAiUsageCarrier(operationId: string): boolean {
+  return operationId.includes(".do");
+}
+
+/**
+ * Token usage, normalized to the OTel GenAI convention: inputTokens is
+ * cache-INCLUSIVE, and cache read/write (and reasoning within output) are
+ * subsets. Emitters that report exclusive input (older gen_ai instrumentations
+ * mirroring Anthropic's API) are caught by the clamp: when the subsets exceed
+ * the declared total, the total is raised to the subset sum (best effort).
+ */
+function normalizeUsage(attrs: Attrs): Usage {
+  const clampSubsets = (u: Usage): Usage => {
+    const cacheSum = (u.cachedInputTokens ?? 0) + (u.cacheWriteTokens ?? 0);
+    if (u.inputTokens != null && cacheSum > u.inputTokens) u.inputTokens = cacheSum;
+    if (u.outputTokens != null && (u.reasoningTokens ?? 0) > u.outputTokens) {
+      u.outputTokens = u.reasoningTokens!;
+    }
+    return u;
+  };
+
+  // breadcrumb.* — manual tracing, trusted as-is.
+  const bcIn = num(attrs["breadcrumb.inputTokens"]);
+  const bcOut = num(attrs["breadcrumb.outputTokens"]);
+  if (bcIn !== null || bcOut !== null) {
+    return clampSubsets({
+      inputTokens: bcIn,
+      outputTokens: bcOut,
+      cachedInputTokens: num(attrs["breadcrumb.cachedInputTokens"]),
+      cacheWriteTokens: num(attrs["breadcrumb.cacheWriteTokens"]),
+      reasoningTokens: num(attrs["breadcrumb.reasoningTokens"]),
+    });
+  }
+
+  const aiOp = str(attrs["ai.operationId"]);
+  if (aiOp !== null && !isAiUsageCarrier(aiOp)) return { ...EMPTY_USAGE };
+
+  // ai.* (Vercel AI SDK v5) — inputTokens cache-inclusive, cached a subset.
+  // Embedding spans report a single ai.usage.tokens count; that's input.
+  const aiIn = first(
+    num(attrs["ai.usage.inputTokens"]),
+    num(attrs["ai.usage.promptTokens"]),
+    num(attrs["ai.usage.tokens"])
+  );
+  const aiOut = first(num(attrs["ai.usage.outputTokens"]), num(attrs["ai.usage.completionTokens"]));
+  if (aiIn !== null || aiOut !== null) {
+    return clampSubsets({
+      inputTokens: aiIn,
+      outputTokens: aiOut,
+      cachedInputTokens: num(attrs["ai.usage.cachedInputTokens"]),
+      cacheWriteTokens: null, // v5 never reports cache writes; they arrive via gen_ai.*
+      reasoningTokens: num(attrs["ai.usage.reasoningTokens"]),
+    });
+  }
+
+  // gen_ai.* (OTel semconv) — cache/reasoning attributes are subsets of the
+  // input/output totals per spec; the clamp recovers non-compliant emitters.
+  const gaIn = num(attrs["gen_ai.usage.input_tokens"]);
+  const gaOut = num(attrs["gen_ai.usage.output_tokens"]);
+  if (gaIn !== null || gaOut !== null) {
+    return clampSubsets({
+      inputTokens: gaIn,
+      outputTokens: gaOut,
+      cachedInputTokens: num(attrs["gen_ai.usage.cache_read.input_tokens"]),
+      cacheWriteTokens: num(attrs["gen_ai.usage.cache_creation.input_tokens"]),
+      reasoningTokens: num(attrs["gen_ai.usage.reasoning.output_tokens"]),
+    });
+  }
+
+  return { ...EMPTY_USAGE };
+}
+
 export function normalizeSpanData(data: OtelSpanData, defaultEnvironment: string): SpanRecord {
   const attrs = data.attributes;
   const isError = data.error !== null;
@@ -93,9 +188,6 @@ export function normalizeSpanData(data: OtelSpanData, defaultEnvironment: string
     : data.name;
 
   const kind = inferKind(data.name, attrs);
-  // The AI SDK mirrors usage onto both the outer ai.generateText span and the
-  // inner doGenerate span — count it only once, on the actual LLM span.
-  const aiWrapperSpan = attrs["ai.operationId"] !== undefined && kind !== "llm";
 
   const input = first(
     parseMaybeJson(attrs["breadcrumb.input"]),
@@ -112,6 +204,14 @@ export function normalizeSpanData(data: OtelSpanData, defaultEnvironment: string
     parseMaybeJson(attrs["ai.toolCall.result"]),
     parseMaybeJson(attrs["gen_ai.output.messages"])
   );
+
+  const provider = first(
+    str(attrs["breadcrumb.provider"]),
+    str(attrs["ai.model.provider"]),
+    str(attrs["gen_ai.provider.name"]),
+    str(attrs["gen_ai.system"])
+  );
+  const usage = normalizeUsage(attrs);
 
   return {
     id: data.spanId,
@@ -138,26 +238,12 @@ export function normalizeSpanData(data: OtelSpanData, defaultEnvironment: string
       str(attrs["gen_ai.response.model"]),
       str(attrs["gen_ai.request.model"])
     ),
-    provider: first(
-      str(attrs["breadcrumb.provider"]),
-      str(attrs["ai.model.provider"]),
-      str(attrs["gen_ai.provider.name"]),
-      str(attrs["gen_ai.system"])
-    ),
-    inputTokens: first(
-      num(attrs["breadcrumb.inputTokens"]),
-      aiWrapperSpan
-        ? null
-        : first(num(attrs["ai.usage.promptTokens"]), num(attrs["ai.usage.inputTokens"])),
-      num(attrs["gen_ai.usage.input_tokens"])
-    ),
-    outputTokens: first(
-      num(attrs["breadcrumb.outputTokens"]),
-      aiWrapperSpan
-        ? null
-        : first(num(attrs["ai.usage.completionTokens"]), num(attrs["ai.usage.outputTokens"])),
-      num(attrs["gen_ai.usage.output_tokens"])
-    ),
+    provider,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    cachedInputTokens: usage.cachedInputTokens,
+    cacheWriteTokens: usage.cacheWriteTokens,
+    reasoningTokens: usage.reasoningTokens,
     cost: num(attrs["breadcrumb.cost"]),
     status: isError ? "error" : "ok",
     error: isError ? (data.error || "error") : null,

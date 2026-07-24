@@ -39,6 +39,7 @@ export interface CostDatum {
   model: string | null;
   cost: number;
   inputTokens: number;
+  cachedInputTokens: number;
   outputTokens: number;
   count: number;
 }
@@ -47,13 +48,14 @@ export interface CostGroup {
   key: string | null;
   cost: number;
   inputTokens: number;
+  cachedInputTokens: number;
   outputTokens: number;
   count: number;
 }
 
 export interface CostSummary {
   windowDays: number;
-  totals: { cost: number; inputTokens: number; outputTokens: number };
+  totals: { cost: number; inputTokens: number; cachedInputTokens: number; outputTokens: number };
   days: CostDatum[];
   byModel: CostGroup[];
   byFunction: CostGroup[];
@@ -72,6 +74,9 @@ export interface SpanRecord {
   provider?: string | null;
   inputTokens?: number | null;
   outputTokens?: number | null;
+  cachedInputTokens?: number | null;
+  cacheWriteTokens?: number | null;
+  reasoningTokens?: number | null;
   cost?: number | null;
   status: "ok" | "error";
   error?: string | null;

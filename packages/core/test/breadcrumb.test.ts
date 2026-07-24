@@ -76,8 +76,8 @@ describe("bc.telemetry (AI SDK dialect)", () => {
     expect(settings.isEnabled).toBe(true);
     expect(settings.functionId).toBe("support-reply");
 
-    // Simulate what generateText does with these settings: an outer span with
-    // telemetry attrs, a nested doGenerate span with model/usage attrs.
+    // Simulate what v5 generateText emits: usage on the doGenerate model-call
+    // span, and a last-step mirror copy on the outer span (must not be counted).
     await settings.tracer.startActiveSpan(
       "ai.generateText",
       {
@@ -85,8 +85,12 @@ describe("bc.telemetry (AI SDK dialect)", () => {
           "ai.operationId": "ai.generateText",
           "ai.telemetry.functionId": "support-reply",
           "ai.telemetry.metadata.userId": "u1",
+          "ai.model.id": "gpt-5",
+          "ai.model.provider": "openai",
           "ai.prompt": '{"prompt":"hallo"}',
           "ai.response.text": "welt",
+          "ai.usage.promptTokens": 120,
+          "ai.usage.completionTokens": 40,
         },
       },
       async (outer) => {
@@ -99,6 +103,8 @@ describe("bc.telemetry (AI SDK dialect)", () => {
               "ai.model.provider": "openai",
               "ai.usage.promptTokens": 120,
               "ai.usage.completionTokens": 40,
+              "gen_ai.usage.input_tokens": 120,
+              "gen_ai.usage.output_tokens": 40,
               "ai.response.text": "welt",
             },
           },
@@ -111,6 +117,7 @@ describe("bc.telemetry (AI SDK dialect)", () => {
 
     const traces = await bc.api.listTraces();
     expect(traces).toHaveLength(1);
+    // usage counted once, on the doGenerate span — the outer mirror is skipped
     expect(traces[0]).toMatchObject({
       name: "support-reply",
       userId: "u1",
@@ -121,9 +128,10 @@ describe("bc.telemetry (AI SDK dialect)", () => {
 
     const spans = await bc.api.getTrace({ id: traces[0]!.traceId });
     const llm = spans.find((s) => s.kind === "llm")!;
-    expect(llm).toMatchObject({ model: "gpt-5", provider: "openai", output: "welt" });
+    expect(llm).toMatchObject({ model: "gpt-5", provider: "openai", output: "welt", inputTokens: 120 });
     const root = spans.find((s) => s.parentSpanId === null)!;
     expect(root.input).toEqual({ prompt: "hallo" });
+    expect(root.inputTokens).toBeNull();
     expect(llm.parentSpanId).toBe(root.id);
   });
 });

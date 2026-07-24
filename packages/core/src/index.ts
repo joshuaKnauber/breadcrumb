@@ -42,9 +42,9 @@ export interface BreadcrumbOptions {
    */
   authorize?: AuthorizeFn;
   /**
-   * Model pricing (USD per 1M tokens) for cost inference when a span has
-   * tokens + model but no explicit cost. Merges over a small built-in table.
-   * Pass `false` to disable inference entirely. Prices are estimates.
+   * Your model prices (USD per 1M tokens), keyed by model name. When a span
+   * has tokens + model but no explicit cost, breadcrumb computes it from these.
+   * Omit to store only costs you set yourself — breadcrumb assumes no prices.
    */
   pricing?: Pricing;
 }
@@ -167,7 +167,6 @@ export type {
   SpanStatus,
 } from "./db/types.js";
 export type { Pricing, PricingTable, ModelPrice } from "./pricing.js";
-export { DEFAULT_PRICING } from "./pricing.js";
 export type { SpanAttrs, SpanContext, TraceAttrs, TraceFn } from "./trace.js";
 export type { TelemetryOptions, TelemetrySettings } from "./otel/pipeline.js";
 export type { RetentionOptions } from "./retention.js";

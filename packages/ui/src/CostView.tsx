@@ -6,10 +6,10 @@ import "./chart.js";
 import { api, fmtInt, fmtMoney } from "./api.js";
 import type { CostGroup, CostSummary } from "./types.js";
 
-// Categorical palette, dark-ground safe. Assigned to models by cost rank, so
-// the biggest spender always gets the most distinct hue. Overflow → "other".
-const MODEL_COLORS = ["#e8a33d", "#6fb3e0", "#b790e8", "#5bb98b", "#e089a7"];
-const OTHER_COLOR = "#5c636d";
+// Neutral lightness ramp, assigned by cost rank: the biggest spender is
+// brightest. Structure through value, not hue. Overflow ranks → darkest gray.
+const MODEL_COLORS = ["#e2e2e2", "#a8a8a8", "#767676", "#525252"];
+const OTHER_COLOR = "#3a3a3a";
 
 const WINDOWS = [7, 14, 30] as const;
 
@@ -33,14 +33,14 @@ export function CostView({ environment }: { environment?: string }) {
       <div className="mx-auto max-w-[900px]">
         <div className="mb-5 flex items-center gap-3">
           <h1 className="text-[15px] font-semibold">Cost</h1>
-          <span className="text-[12px] text-faint">estimated from token usage</span>
-          <div className="ml-auto flex gap-1 rounded-md border border-line p-0.5">
+          <span className="text-[12px] text-faint">USD</span>
+          <div className="ml-auto flex gap-0.5 rounded-md bg-panel p-0.5">
             {WINDOWS.map((w) => (
               <button
                 key={w}
                 onClick={() => setDays(w)}
                 className={`rounded px-2.5 py-1 font-mono text-[12px] ${
-                  days === w ? "bg-panel2 text-fg" : "text-muted hover:text-fg"
+                  days === w ? "bg-panel2 text-fg" : "text-faint hover:text-muted"
                 }`}
               >
                 {w}d
@@ -51,7 +51,7 @@ export function CostView({ environment }: { environment?: string }) {
 
         {cost.isLoading && <div className="text-faint">loading…</div>}
         {cost.data && cost.data.totals.cost === 0 && (
-          <div className="rounded-lg border border-line bg-panel px-4 py-8 text-center text-faint">
+          <div className="rounded-md bg-panel px-4 py-8 text-center text-faint">
             No cost recorded in this window. Spans need a model with known pricing, or an explicit cost.
           </div>
         )}
@@ -59,7 +59,11 @@ export function CostView({ environment }: { environment?: string }) {
           <>
             <div className="mb-6 grid grid-cols-3 gap-3">
               <Tile label="total cost" value={fmtMoney(cost.data.totals.cost)} accent />
-              <Tile label="input tokens" value={fmtInt(cost.data.totals.inputTokens)} />
+              <Tile
+                label="input tokens"
+                value={fmtInt(cost.data.totals.inputTokens)}
+                sub={cachedShare(cost.data.totals)}
+              />
               <Tile label="output tokens" value={fmtInt(cost.data.totals.outputTokens)} />
             </div>
 
@@ -75,11 +79,29 @@ export function CostView({ environment }: { environment?: string }) {
   );
 }
 
-function Tile({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function cachedShare(totals: { inputTokens: number; cachedInputTokens: number }): string | null {
+  if (totals.cachedInputTokens === 0 || totals.inputTokens === 0) return null;
+  return `${Math.round((totals.cachedInputTokens / totals.inputTokens) * 100)}% cached`;
+}
+
+function Tile({
+  label,
+  value,
+  sub,
+  accent,
+}: {
+  label: string;
+  value: string;
+  sub?: string | null;
+  accent?: boolean;
+}) {
   return (
-    <div className="rounded-lg border border-line bg-panel px-4 py-3">
+    <div className="rounded-md bg-panel px-4 py-3">
       <div className="font-mono text-[11px] tracking-wider text-faint uppercase">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold tabular-nums ${accent ? "text-accent" : ""}`}>{value}</div>
+      <div className={`mt-1 text-2xl tabular-nums ${accent ? "font-semibold" : "font-medium text-muted"}`}>
+        {value}
+        {sub && <span className="ml-2 align-middle font-mono text-[11px] font-normal text-faint">{sub}</span>}
+      </div>
     </div>
   );
 }
@@ -131,12 +153,12 @@ function CostChart({
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: "#211f1d",
-          borderColor: "#38352f",
+          backgroundColor: "#202020",
+          borderColor: "#2a2a2a",
           borderWidth: 1,
           padding: 10,
-          titleColor: "#ecebe8",
-          bodyColor: "#a4a09a",
+          titleColor: "#ececec",
+          bodyColor: "#989898",
           callbacks: {
             label: (ctx) => `${ctx.dataset.label}: ${fmtMoney(ctx.parsed.y)}`,
           },
@@ -148,11 +170,11 @@ function CostChart({
           stacked: true,
           grid: { display: false },
           ticks: { maxRotation: 0, autoSkipPadding: 16 },
-          border: { color: "#38352f" },
+          border: { display: false },
         },
         y: {
           stacked: true,
-          grid: { color: "#38352f80" },
+          grid: { color: "#ffffff0a" },
           border: { display: false },
           ticks: { callback: (v) => fmtMoney(Number(v)) },
         },
@@ -163,7 +185,7 @@ function CostChart({
   }, [summary, colorForModel, range]);
 
   return (
-    <div className="mb-3 rounded-lg border border-line bg-panel p-4">
+    <div className="mb-3 rounded-md bg-panel p-4">
       <div className="h-52">
         <Bar data={data} options={options} />
       </div>
@@ -199,29 +221,24 @@ function FunctionTable({ functions, total }: { functions: CostGroup[]; total: nu
   return (
     <div>
       <h2 className="mb-2 font-mono text-[11px] tracking-wider text-faint uppercase">by function</h2>
-      <div className="overflow-hidden rounded-lg border border-line">
-        {functions.map((f, i) => {
+      <div className="overflow-hidden rounded-md bg-panel">
+        {functions.map((f) => {
           const share = (f.cost / total) * 100;
           return (
-            <div
-              key={String(f.key)}
-              className={`relative flex items-center gap-3 px-3.5 py-2.5 ${
-                i > 0 ? "border-t border-panel2" : ""
-              }`}
-            >
+            <div key={String(f.key)} className="relative flex items-center gap-3 px-4 py-2.5">
               <span
                 className="absolute inset-y-0 left-0 bg-accent/8"
                 style={{ width: `${share}%` }}
                 aria-hidden
               />
               <span className="relative z-10 min-w-0 flex-1 truncate font-medium">{f.key ?? "unknown"}</span>
-              <span className="relative z-10 font-mono text-[12px] text-muted tabular-nums">
+              <span className="relative z-10 font-mono text-[12px] text-faint tabular-nums">
                 {f.count === 1 ? "1 run" : `${fmtInt(f.count)} runs`}
               </span>
-              <span className="relative z-10 w-24 text-right font-mono text-[12px] text-muted tabular-nums">
+              <span className="relative z-10 w-24 text-right font-mono text-[12px] text-faint tabular-nums">
                 {fmtInt(f.inputTokens + f.outputTokens)} tok
               </span>
-              <span className="relative z-10 w-20 text-right font-mono text-[13px] font-medium text-accent tabular-nums">
+              <span className="relative z-10 w-20 text-right font-mono text-[13px] font-medium tabular-nums">
                 {fmtMoney(f.cost)}
               </span>
             </div>

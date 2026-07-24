@@ -20,8 +20,15 @@ export interface SpanRecord {
   sessionId?: string | null;
   model?: string | null;
   provider?: string | null;
+  /** Total input tokens, INCLUSIVE of cached reads/writes (normalized). */
   inputTokens?: number | null;
   outputTokens?: number | null;
+  /** Cache-read tokens — a subset of inputTokens, billed at a discount. */
+  cachedInputTokens?: number | null;
+  /** Cache-write/creation tokens — a subset of inputTokens, billed at a premium. */
+  cacheWriteTokens?: number | null;
+  /** Reasoning/thinking tokens — a subset of outputTokens. */
+  reasoningTokens?: number | null;
   cost?: number | null;
   status: SpanStatus;
   error?: string | null;
@@ -115,6 +122,8 @@ export interface CostDatum {
   model: string | null;
   cost: number;
   inputTokens: number;
+  /** Cache-read tokens within inputTokens. */
+  cachedInputTokens: number;
   outputTokens: number;
   count: number;
 }
@@ -123,13 +132,14 @@ export interface CostGroup {
   key: string | null;
   cost: number;
   inputTokens: number;
+  cachedInputTokens: number;
   outputTokens: number;
   count: number;
 }
 
 export interface CostSummary {
   windowDays: number;
-  totals: { cost: number; inputTokens: number; outputTokens: number };
+  totals: { cost: number; inputTokens: number; cachedInputTokens: number; outputTokens: number };
   days: CostDatum[];
   byModel: CostGroup[];
   byFunction: CostGroup[];

@@ -7,6 +7,12 @@ export interface SpanAttrs {
   provider?: string;
   inputTokens?: number;
   outputTokens?: number;
+  /** Cache-read tokens (subset of inputTokens). */
+  cachedInputTokens?: number;
+  /** Cache-write tokens (subset of inputTokens). */
+  cacheWriteTokens?: number;
+  /** Reasoning/thinking tokens (subset of outputTokens). */
+  reasoningTokens?: number;
   cost?: number;
   input?: unknown;
   output?: unknown;
@@ -38,6 +44,9 @@ function applySpanAttrs(span: Span, attrs: SpanAttrs): void {
   if (attrs.provider !== undefined) span.setAttribute("breadcrumb.provider", attrs.provider);
   if (attrs.inputTokens !== undefined) span.setAttribute("breadcrumb.inputTokens", attrs.inputTokens);
   if (attrs.outputTokens !== undefined) span.setAttribute("breadcrumb.outputTokens", attrs.outputTokens);
+  if (attrs.cachedInputTokens !== undefined) span.setAttribute("breadcrumb.cachedInputTokens", attrs.cachedInputTokens);
+  if (attrs.cacheWriteTokens !== undefined) span.setAttribute("breadcrumb.cacheWriteTokens", attrs.cacheWriteTokens);
+  if (attrs.reasoningTokens !== undefined) span.setAttribute("breadcrumb.reasoningTokens", attrs.reasoningTokens);
   if (attrs.cost !== undefined) span.setAttribute("breadcrumb.cost", attrs.cost);
   if (attrs.input !== undefined) span.setAttribute("breadcrumb.input", JSON.stringify(attrs.input));
   if (attrs.output !== undefined) span.setAttribute("breadcrumb.output", JSON.stringify(attrs.output));

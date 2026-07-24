@@ -23,6 +23,9 @@ export function spanToRow(span: SpanRecord): Record<string, unknown> {
     provider: span.provider ?? null,
     input_tokens: span.inputTokens ?? null,
     output_tokens: span.outputTokens ?? null,
+    cached_input_tokens: span.cachedInputTokens ?? null,
+    cache_write_tokens: span.cacheWriteTokens ?? null,
+    reasoning_tokens: span.reasoningTokens ?? null,
     cost: span.cost ?? null,
     status: span.status,
     error: span.error ?? null,
@@ -66,6 +69,9 @@ export function rowToSpan(row: Record<string, unknown>): SpanRecord {
     provider: (row.provider as string | null) ?? null,
     inputTokens: numValue(row.input_tokens),
     outputTokens: numValue(row.output_tokens),
+    cachedInputTokens: numValue(row.cached_input_tokens),
+    cacheWriteTokens: numValue(row.cache_write_tokens),
+    reasoningTokens: numValue(row.reasoning_tokens),
     cost: numValue(row.cost),
     status: row.status as SpanRecord["status"],
     error: (row.error as string | null) ?? null,
@@ -202,6 +208,7 @@ export function costByDaySelect(table: string, dayExpr: string, filter: string):
   return `SELECT ${dayExpr} AS day, model,
     SUM(cost) AS cost,
     SUM(COALESCE(input_tokens, 0)) AS input_tokens,
+    SUM(COALESCE(cached_input_tokens, 0)) AS cached_input_tokens,
     SUM(COALESCE(output_tokens, 0)) AS output_tokens,
     COUNT(*) AS count
   FROM ${table}
@@ -215,6 +222,7 @@ export function costByFunctionSelect(table: string, filter: string): string {
   return `SELECT root_name AS key,
     SUM(cost) AS cost,
     SUM(input_tokens) AS input_tokens,
+    SUM(cached_input_tokens) AS cached_input_tokens,
     SUM(output_tokens) AS output_tokens,
     COUNT(*) AS count
   FROM (
@@ -222,6 +230,7 @@ export function costByFunctionSelect(table: string, filter: string): string {
       MAX(CASE WHEN parent_span_id IS NULL THEN name END) AS root_name,
       SUM(COALESCE(cost, 0)) AS cost,
       SUM(COALESCE(input_tokens, 0)) AS input_tokens,
+      SUM(COALESCE(cached_input_tokens, 0)) AS cached_input_tokens,
       SUM(COALESCE(output_tokens, 0)) AS output_tokens
     FROM ${table}
     WHERE 1 = 1 ${filter}
@@ -241,6 +250,7 @@ export function shapeCostSummary(
     model: (r.model as string | null) ?? null,
     cost: numValue(r.cost) ?? 0,
     inputTokens: numValue(r.input_tokens) ?? 0,
+    cachedInputTokens: numValue(r.cached_input_tokens) ?? 0,
     outputTokens: numValue(r.output_tokens) ?? 0,
     count: numValue(r.count) ?? 0,
   }));
@@ -249,16 +259,18 @@ export function shapeCostSummary(
     (a, d) => ({
       cost: a.cost + d.cost,
       inputTokens: a.inputTokens + d.inputTokens,
+      cachedInputTokens: a.cachedInputTokens + d.cachedInputTokens,
       outputTokens: a.outputTokens + d.outputTokens,
     }),
-    { cost: 0, inputTokens: 0, outputTokens: 0 }
+    { cost: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0 }
   );
 
   const modelMap = new Map<string | null, CostGroup>();
   for (const d of days) {
-    const g = modelMap.get(d.model) ?? { key: d.model, cost: 0, inputTokens: 0, outputTokens: 0, count: 0 };
+    const g = modelMap.get(d.model) ?? { key: d.model, cost: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, count: 0 };
     g.cost += d.cost;
     g.inputTokens += d.inputTokens;
+    g.cachedInputTokens += d.cachedInputTokens;
     g.outputTokens += d.outputTokens;
     g.count += d.count;
     modelMap.set(d.model, g);
@@ -270,6 +282,7 @@ export function shapeCostSummary(
       key: (r.key as string | null) ?? null,
       cost: numValue(r.cost) ?? 0,
       inputTokens: numValue(r.input_tokens) ?? 0,
+      cachedInputTokens: numValue(r.cached_input_tokens) ?? 0,
       outputTokens: numValue(r.output_tokens) ?? 0,
       count: numValue(r.count) ?? 0,
     }))
