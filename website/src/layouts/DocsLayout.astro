@@ -24,26 +24,25 @@ const rawMarkdown = (sources[`/src/pages/docs/${slug}.mdx`] ?? "").replace(
 
 <Layout title={title} description={description}>
 	<div class="min-h-screen">
-		<header class="sticky top-0 z-20 bg-bg/80 backdrop-blur-md">
-			<div class="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
-				<a href="/" class="flex items-center gap-2 text-fg hover:opacity-80 transition-opacity">
-					<Logo class="h-[22px] w-[22px]" />
-					<span class="text-lg font-medium tracking-tight">breadcrumb</span>
+		<header class="sticky top-0 z-20 border-b border-line bg-canvas/85 backdrop-blur-md">
+			<div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+				<a href="/" class="flex items-center gap-2.5 text-fg hover:opacity-80 transition-opacity">
+					<Logo class="h-[17px] w-[17px]" />
+					<span class="text-[15px] font-semibold tracking-[-0.02em]">breadcrumb</span>
 				</a>
-				<div class="flex items-center gap-1">
+				<div class="flex items-center gap-4 font-mono text-[12.5px] text-faint">
+					<a href="/docs/" class="hidden md:inline hover:text-fg transition-colors">docs</a>
 					<a
-						href="https://github.com/breadcrumb-sh/breadcrumb"
+						href="https://github.com/joshuaKnauber/breadcrumb"
 						target="_blank"
 						rel="noreferrer"
-						class="flex h-8 w-8 items-center justify-center rounded-sm text-fg-muted hover:text-fg transition-colors"
+						class="hover:text-fg transition-colors">github</a
 					>
-						<i class="ph ph-github-logo"></i>
-					</a>
 					<button
 						id="nav-toggle"
 						type="button"
 						aria-label="Toggle navigation"
-						class="md:hidden flex h-8 w-8 items-center justify-center rounded-sm text-fg-muted hover:text-fg transition-colors cursor-pointer"
+						class="md:hidden -mr-1 flex h-8 w-8 items-center justify-center text-muted hover:text-fg transition-colors cursor-pointer"
 					>
 						<i class="ph ph-list text-lg"></i>
 					</button>
@@ -51,17 +50,17 @@ const rawMarkdown = (sources[`/src/pages/docs/${slug}.mdx`] ?? "").replace(
 			</div>
 		</header>
 
-		<div id="mobile-nav" class="hidden md:hidden fixed inset-0 z-40 bg-bg overflow-y-auto flex-col">
-			<div class="flex h-14 shrink-0 items-center justify-between px-6">
-				<span class="flex items-center gap-2 text-fg">
-					<Logo class="h-[22px] w-[22px]" />
-					<span class="text-lg font-medium tracking-tight">breadcrumb</span>
+		<div id="mobile-nav" class="hidden md:hidden fixed inset-0 z-40 bg-canvas overflow-y-auto flex-col">
+			<div class="flex h-16 shrink-0 items-center justify-between px-6">
+				<span class="flex items-center gap-2.5 text-fg">
+					<Logo class="h-[17px] w-[17px]" />
+					<span class="text-[15px] font-semibold tracking-[-0.02em]">breadcrumb</span>
 				</span>
 				<button
 					id="nav-close"
 					type="button"
 					aria-label="Close navigation"
-					class="flex h-8 w-8 items-center justify-center rounded-sm text-fg-muted hover:text-fg transition-colors cursor-pointer"
+					class="-mr-1 flex h-8 w-8 items-center justify-center text-muted hover:text-fg transition-colors cursor-pointer"
 				>
 					<i class="ph ph-x text-lg"></i>
 				</button>
@@ -73,7 +72,7 @@ const rawMarkdown = (sources[`/src/pages/docs/${slug}.mdx`] ?? "").replace(
 
 		<div class="mx-auto flex max-w-6xl gap-12 px-6">
 			<aside class="hidden md:block w-56 shrink-0">
-				<nav class="sticky top-14 max-h-[calc(100vh-3.5rem)] overflow-y-auto py-10 pr-2 flex flex-col gap-7">
+				<nav class="sticky top-16 max-h-[calc(100vh-4rem)] overflow-y-auto py-10 pr-2 flex flex-col gap-7">
 					<DocsNav />
 				</nav>
 			</aside>
@@ -81,20 +80,23 @@ const rawMarkdown = (sources[`/src/pages/docs/${slug}.mdx`] ?? "").replace(
 			<main class="min-w-0 flex-1 py-10 md:py-14">
 				{
 					rawMarkdown && (
-						<div class="max-w-2xl flex justify-end">
+						<div class="max-w-[720px] flex justify-end">
 							<button
 								id="copy-page"
 								type="button"
 								data-md={rawMarkdown}
-								class="group inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-xs text-fg-subtle ring-[1px] ring-border hover:text-fg hover:ring-border-strong transition-colors cursor-pointer"
+								class="copy-page inline-flex items-center gap-1.5 rounded-md border border-line bg-panel px-2.5 py-1.5 text-[12px] text-muted hover:text-fg hover:border-line-strong transition-colors cursor-pointer"
 							>
 								<i class="ph ph-copy" />
-								<span>Copy page</span>
+								<span class="swap">
+									<span>Copy page</span>
+									<span aria-hidden="true">Copied</span>
+								</span>
 							</button>
 						</div>
 					)
 				}
-				<article class="docs-content mt-4 max-w-2xl">
+				<article class="docs-content mt-4 max-w-[720px]">
 					<slot />
 				</article>
 			</main>
@@ -104,14 +106,11 @@ const rawMarkdown = (sources[`/src/pages/docs/${slug}.mdx`] ?? "").replace(
 
 <script>
 	const copyPage = document.getElementById("copy-page");
-	const copyLabel = copyPage?.querySelector("span");
 	copyPage?.addEventListener("click", async () => {
 		try {
 			await navigator.clipboard.writeText(copyPage.dataset.md ?? "");
-			if (copyLabel) copyLabel.textContent = "Copied";
-			setTimeout(() => {
-				if (copyLabel) copyLabel.textContent = "Copy page";
-			}, 1500);
+			copyPage.classList.add("copied");
+			setTimeout(() => copyPage.classList.remove("copied"), 1500);
 		} catch {}
 	});
 

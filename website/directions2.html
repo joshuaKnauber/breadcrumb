@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Breadcrumb — halftone / editorial directions</title>
+		<script src="https://cdn.tailwindcss.com"></script>
+		<link
+			href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Geist+Mono:wght@400;500&display=swap"
+			rel="stylesheet"
+		/>
+		<style>
+			body { font-family: "Instrument Sans", sans-serif; }
+			.mono { font-family: "Geist Mono", monospace; }
+			.serif { font-family: "Instrument Serif", serif; }
+
+			/* Text filled with a dot field → reads as halftone/dithered type.
+			   (Real build would use a Bayer-dithered canvas like valv for soft edges.) */
+			.dot-text {
+				background-image: radial-gradient(currentColor 1.1px, transparent 1.3px);
+				background-size: 5px 5px;
+				-webkit-background-clip: text;
+				background-clip: text;
+				color: transparent;
+			}
+			.dot-text-fine {
+				background-image: radial-gradient(currentColor 0.9px, transparent 1.1px);
+				background-size: 4px 4px;
+				-webkit-background-clip: text;
+				background-clip: text;
+				color: transparent;
+			}
+			/* Ambient dithered field, fading out. */
+			.dither {
+				background-image: radial-gradient(currentColor 1px, transparent 1.2px);
+				background-size: 6px 6px;
+			}
+			.fade-down { -webkit-mask-image: linear-gradient(#000, transparent); mask-image: linear-gradient(#000, transparent); }
+			.rule { height: 1px; background: currentColor; opacity: 0.18; }
+			/* Halftone plate: radial value ramp, punched by a shrinking dot mask. */
+			.halftone-plate {
+				background: radial-gradient(circle at 42% 38%, #efe9dc, #b9ad97 42%, #6f6552 72%, #3a3428 100%);
+				-webkit-mask-image: radial-gradient(circle, #000 60%, transparent 62%);
+				mask-image: radial-gradient(circle, #000 60%, transparent 62%);
+				-webkit-mask-size: 6px 6px; mask-size: 6px 6px;
+			}
+		</style>
+	</head>
+	<body class="bg-neutral-900 text-neutral-200">
+		<div class="mx-auto max-w-3xl px-6 py-16 text-center">
+			<h1 class="serif text-4xl text-white">Halftone &amp; editorial directions</h1>
+			<p class="mt-3 text-neutral-400">
+				Same family as valv.sh — dithered/halftone type, minimal, a touch traditional. Three takes.
+			</p>
+		</div>
+
+		<!-- ============ 05 · DITHERED MASTHEAD ============ -->
+		<div class="mono border-y border-neutral-800 bg-neutral-950 px-6 py-3 text-xs text-neutral-500">
+			<span class="text-neutral-300">05 · Dithered masthead</span> — the valv move, breadcrumb's own:
+			the wordmark rendered as a halftone dot field, quiet editorial masthead, one accent.
+		</div>
+		<section class="relative overflow-hidden bg-[#0e0e0d] px-6">
+			<div class="dither fade-down pointer-events-none absolute inset-x-0 top-0 h-64 text-[#c4b5a0] opacity-30"></div>
+			<div class="relative mx-auto max-w-4xl pt-16 pb-28">
+				<div class="mono flex items-center justify-between text-xs text-neutral-500">
+					<span>breadcrumb</span>
+					<span class="flex gap-6"><a href="#" class="hover:text-neutral-200">docs</a><a href="#" class="hover:text-neutral-200">github</a></span>
+				</div>
+				<div class="rule mt-4 text-white"></div>
+
+				<div class="pt-24 pb-20 text-center">
+					<div class="mono text-[11px] tracking-[0.35em] text-[#a08862] uppercase">Embeddable LLM tracing</div>
+					<h2 class="dot-text mx-auto mt-8 text-[74px] leading-[0.95] font-semibold tracking-tight text-neutral-100 md:text-[104px]">
+						breadcrumb
+					</h2>
+					<p class="mx-auto mt-8 max-w-md text-lg leading-8 text-neutral-400">
+						See every step your AI takes — in your own Postgres, your own dashboard.
+					</p>
+					<div class="mono mt-10 flex items-center justify-center gap-6 text-sm">
+						<a href="#" class="border-b border-[#c4b5a0] pb-0.5 text-neutral-100">quickstart →</a>
+						<span class="text-neutral-600">npm i @breadcrumb-sh/core</span>
+					</div>
+				</div>
+				<div class="rule text-white"></div>
+			</div>
+		</section>
+
+		<!-- ============ 06 · EDITORIAL PRINT ============ -->
+		<div class="mono border-y border-neutral-800 bg-neutral-950 px-6 py-3 text-xs text-neutral-500">
+			<span class="text-neutral-300">06 · Editorial print</span> — traditional: warm paper, a serif
+			display, hairline rules, mono small-caps labels, a halftone plate as the "figure." Print, not SaaS.
+		</div>
+		<section class="bg-[#f2efe7] px-6 text-[#1c1913]">
+			<div class="mx-auto max-w-5xl pt-14 pb-28">
+				<div class="mono flex items-center justify-between text-[11px] tracking-wider text-[#8a8172] uppercase">
+					<span>Breadcrumb</span>
+					<span class="flex gap-6"><a href="#">Docs</a><a href="#">GitHub</a></span>
+				</div>
+				<div class="rule mt-4 text-[#1c1913]"></div>
+
+				<div class="grid items-center gap-14 pt-20 md:grid-cols-[1.1fr_0.9fr]">
+					<div>
+						<div class="mono text-[11px] tracking-[0.3em] text-[#9a7b52] uppercase">Embeddable LLM tracing</div>
+						<h2 class="serif mt-6 text-[52px] leading-[1.0] tracking-tight md:text-[68px]">
+							See every step<br /><span class="italic">your AI</span> takes.
+						</h2>
+						<p class="mt-7 max-w-sm text-lg leading-8 text-[#5c5548]">
+							Tracing that lives in your backend. Traces in your own Postgres, a dashboard
+							you serve from your app.
+						</p>
+						<div class="mt-9 flex items-center gap-6">
+							<a href="#" class="rounded-sm bg-[#1c1913] px-6 py-3 text-sm font-medium text-[#f2efe7]">Quickstart</a>
+							<a href="#" class="mono text-sm text-[#5c5548] underline decoration-[#c9c1b0] underline-offset-4">npm i @breadcrumb-sh/core</a>
+						</div>
+					</div>
+					<figure class="text-center">
+						<div class="halftone-plate mx-auto aspect-square w-full max-w-xs rounded-full text-[#3a3428]"></div>
+						<figcaption class="mono mt-4 text-[11px] tracking-wider text-[#9a8f7c] uppercase">Fig. 1 — a trace, in your database</figcaption>
+					</figure>
+				</div>
+				<div class="rule mt-24 text-[#1c1913]"></div>
+			</div>
+		</section>
+
+		<!-- ============ 07 · TYPOGRAPHIC + HALFTONE PHRASE ============ -->
+		<div class="mono border-y border-neutral-800 bg-neutral-950 px-6 py-3 text-xs text-neutral-500">
+			<span class="text-neutral-300">07 · Typographic</span> — no images, no chrome. One giant
+			statement; the load-bearing phrase is dithered. Maximum restraint, all in the type.
+		</div>
+		<section class="bg-[#0e0e0d] px-6">
+			<div class="mx-auto max-w-4xl pt-16 pb-32">
+				<div class="mono flex items-center justify-between text-xs text-neutral-500">
+					<span>breadcrumb</span>
+					<span class="flex gap-6"><a href="#" class="hover:text-neutral-200">docs</a><a href="#" class="hover:text-neutral-200">github</a></span>
+				</div>
+				<div class="rule mt-4 text-white"></div>
+
+				<h2 class="mt-28 text-[46px] leading-[1.08] font-medium tracking-tight text-neutral-100 md:text-[68px]">
+					Every step your AI takes,<br />
+					<span class="dot-text-fine text-[#d8c8ad]">traced in your own stack.</span>
+				</h2>
+				<p class="mono mt-10 max-w-lg text-sm leading-7 text-neutral-500">
+					Embeddable LLM tracing. Your database, your deployment, your UI. No platform,
+					nothing leaving your infrastructure.
+				</p>
+				<div class="mono mt-12 flex gap-8 text-sm text-neutral-400">
+					<a href="#" class="text-neutral-100 underline decoration-neutral-700 underline-offset-4">quickstart →</a>
+					<a href="#" class="hover:text-neutral-200">github</a>
+					<span class="text-neutral-600">npm i @breadcrumb-sh/core</span>
+				</div>
+			</div>
+		</section>
+
+		<div class="mx-auto max-w-3xl px-6 py-16 text-center text-sm text-neutral-500">
+			The dithered type here is a CSS stand-in; the real build renders it on a canvas (like valv)
+			so edges dither softly and can react to the pointer. Tell me which take, dark or paper, serif
+			or grotesk.
+		</div>
+	</body>
+</html>

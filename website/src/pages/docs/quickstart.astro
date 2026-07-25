@@ -95,7 +95,7 @@ const traceManual = `await bc.trace("support-reply", { userId }, async (t) => {
 
 const migratePostgres = "npx breadcrumb migrate --database $DATABASE_URL";
 
-const codeProps = { theme: "tokyo-night" as const };
+const codeProps = { theme: "vitesse-dark" as const };
 
 // Server-rendered default prompt (Next.js + Postgres + AI SDK), so the box is
 // filled before the script runs. The script rebuilds it as choices change.
@@ -325,7 +325,7 @@ Good to know:
 		color: var(--color-fg);
 	}
 	.copy-prompt.copied {
-		color: var(--color-accent);
+		color: var(--color-fg);
 	}
 </style>
 

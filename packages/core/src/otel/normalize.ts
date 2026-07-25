@@ -183,9 +183,11 @@ export function normalizeSpanData(data: OtelSpanData, defaultEnvironment: string
   const attrs = data.attributes;
   const isError = data.error !== null;
 
+  // Tool spans arrive named after the operation (`ai.toolCall`), not the tool,
+  // so every tool in a trace would read alike. The tool name is the useful one.
   const name = !data.parentSpanId
     ? (str(attrs["ai.telemetry.functionId"]) ?? data.name)
-    : data.name;
+    : (str(attrs["ai.toolCall.name"]) ?? str(attrs["gen_ai.tool.name"]) ?? data.name);
 
   const kind = inferKind(data.name, attrs);
 

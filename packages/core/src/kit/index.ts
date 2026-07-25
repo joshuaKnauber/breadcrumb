@@ -4,12 +4,16 @@
  * and display formatters. Pure and browser-safe; bring your own components.
  */
 export {
-  buildTree,
-  errorPaths,
   asMessages,
   preview,
-  type TreeNode,
-  type GroupStats,
+  flowRows,
+  fullRows,
+  hotspots,
+  selfTime,
+  selfIntervals,
+  displayName,
   type ChatMessage,
+  type FlowRow,
+  type Hotspots,
 } from "./tree.js";
 export { fmtMs, fmtTokens, fmtCost, fmtMoney, fmtInt, fmtTime } from "./format.js";

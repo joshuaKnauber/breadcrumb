@@ -1,87 +1,180 @@
 import type { SpanRecord } from "../db/types.js";
 
 /**
- * Span tree with consecutive same-name siblings collapsed into groups.
- * Groups are display-only: expanding one reveals every member span.
+ * Time a span spent on its own work: its extent minus whatever its children
+ * covered. A parent that only awaits children has near-zero self time, which is
+ * what separates "this step was slow" from "this step was waiting".
  */
-export type TreeNode =
-  | { type: "span"; span: SpanRecord; children: TreeNode[] }
-  | { type: "group"; name: string; spans: SpanRecord[]; children: TreeNode[][]; stats: GroupStats };
-
-export interface GroupStats {
-  count: number;
-  totalMs: number;
-  cost: number | null;
-  hasError: boolean;
+export function selfIntervals(span: SpanRecord, children: SpanRecord[]): [number, number][] {
+  const end = span.endTime ?? span.startTime;
+  const gaps: [number, number][] = [];
+  let cursor = span.startTime;
+  for (const child of [...children].sort((a, b) => a.startTime - b.startTime)) {
+    if (child.startTime > cursor) gaps.push([cursor, child.startTime]);
+    cursor = Math.max(cursor, child.endTime ?? child.startTime);
+  }
+  if (cursor < end) gaps.push([cursor, end]);
+  return gaps;
 }
 
-const GROUP_THRESHOLD = 4;
+export function selfTime(span: SpanRecord, children: SpanRecord[]): number {
+  return selfIntervals(span, children).reduce((sum, [a, b]) => sum + (b - a), 0);
+}
 
-export function buildTree(spans: SpanRecord[]): TreeNode[] {
-  const byParent = new Map<string | null, SpanRecord[]>();
+/**
+ * Human-facing span name. SDK spans carry their plumbing in the name
+ * (`ai.streamText.doStream`); the operation is what the reader cares about.
+ */
+export function displayName(span: SpanRecord): string {
+  return span.name.replace(/^ai\./, "").replace(/\.(doStream|doGenerate|doEmbed)$/, "");
+}
+
+/** A row in the denoised flow view: a span, or a tucked-away run of trivia. */
+export type FlowRow =
+  | { type: "span"; span: SpanRecord; depth: number; children: SpanRecord[] }
+  | { type: "minor"; parentId: string; spans: SpanRecord[]; depth: number };
+
+/**
+ * Denoised view of a trace. Instrumentation wraps every model call in a
+ * pass-through span (`ai.streamText` around `ai.streamText.doStream`), which
+ * doubles the tree depth without adding information. Folding those leaves the
+ * sequence people actually reason about: model call, tool call, model call,
+ * grouped under the agent that ran them.
+ *
+ * Nothing is discarded — folded spans are reachable via the full tree, and
+ * trivial leaves collapse into a counted row rather than disappearing.
+ */
+export function flowRows(spans: SpanRecord[]): FlowRow[] {
   const ids = new Set(spans.map((s) => s.id));
+  const byParent = new Map<string | null, SpanRecord[]>();
   for (const s of spans) {
-    // parents outside the fetched set (shouldn't happen) fall back to root
     const key = s.parentSpanId && ids.has(s.parentSpanId) ? s.parentSpanId : null;
     byParent.get(key)?.push(s) ?? byParent.set(key, [s]);
   }
-  for (const list of byParent.values()) list.sort((a, b) => a.startTime - b.startTime || a.id.localeCompare(b.id));
+  for (const list of byParent.values()) list.sort((a, b) => a.startTime - b.startTime);
 
-  function level(parent: string | null): TreeNode[] {
-    const siblings = byParent.get(parent) ?? [];
-    const nodes: TreeNode[] = [];
-    let i = 0;
-    while (i < siblings.length) {
-      let j = i;
-      while (j < siblings.length && siblings[j]!.name === siblings[i]!.name) j++;
-      const streak = siblings.slice(i, j);
-      if (streak.length >= GROUP_THRESHOLD) {
-        nodes.push({
-          type: "group",
-          name: streak[0]!.name,
-          spans: streak,
-          children: streak.map((s) => level(s.id)),
-          stats: {
-            count: streak.length,
-            totalMs: streak.reduce((a, s) => a + ((s.endTime ?? s.startTime) - s.startTime), 0),
-            cost: streak.some((s) => s.cost != null)
-              ? streak.reduce((a, s) => a + (s.cost ?? 0), 0)
-              : null,
-            hasError: streak.some((s) => s.status === "error"),
-          },
-        });
-      } else {
-        for (const s of streak) nodes.push({ type: "span", span: s, children: level(s.id) });
+  const root = (byParent.get(null) ?? [])[0];
+  if (!root) return [];
+  const total = (root.endTime ?? root.startTime) - root.startTime || 1;
+
+  const kids = (s: SpanRecord) => byParent.get(s.id) ?? [];
+  const extent = (s: SpanRecord) => (s.endTime ?? s.startTime) - s.startTime;
+
+  // Errors and anything carrying money or tokens always stay visible.
+  const load = (s: SpanRecord) =>
+    s.status === "error" || s.cost != null || s.inputTokens != null;
+
+  const isWrapper = (s: SpanRecord): boolean => {
+    const children = kids(s);
+    if (children.length !== 1 || load(s)) return false;
+    return (
+      extent(children[0]!) >= extent(s) * 0.95 &&
+      selfTime(s, children) < total * 0.02
+    );
+  };
+  const isMinor = (s: SpanRecord): boolean =>
+    kids(s).length === 0 && s.kind === "span" && !load(s) && selfTime(s, []) < total * 0.01;
+
+  const out: FlowRow[] = [{ type: "span", span: root, depth: 0, children: kids(root) }];
+
+  const walk = (parent: SpanRecord, depth: number): void => {
+    const minor: SpanRecord[] = [];
+    for (const child of kids(parent)) {
+      let node = child;
+      while (isWrapper(node)) node = kids(node)[0]!;
+      if (isMinor(node)) {
+        minor.push(node);
+        continue;
       }
-      i = j;
+      out.push({ type: "span", span: node, depth, children: kids(node) });
+      walk(node, depth + 1);
     }
-    return nodes;
-  }
-
-  return level(null);
+    if (minor.length > 0) out.push({ type: "minor", parentId: parent.id, spans: minor, depth });
+  };
+  walk(root, 1);
+  return out;
 }
 
-/** Path (as key set) to every error span, so failed branches start expanded. */
-export function errorPaths(spans: SpanRecord[]): { expandKeys: Set<string>; firstErrorId: string | null } {
+/** Flat depth-indexed rows for the unfolded tree, matching flowRows' shape. */
+export function fullRows(spans: SpanRecord[]): FlowRow[] {
+  const ids = new Set(spans.map((s) => s.id));
+  const byParent = new Map<string | null, SpanRecord[]>();
+  for (const s of spans) {
+    const key = s.parentSpanId && ids.has(s.parentSpanId) ? s.parentSpanId : null;
+    byParent.get(key)?.push(s) ?? byParent.set(key, [s]);
+  }
+  for (const list of byParent.values()) list.sort((a, b) => a.startTime - b.startTime);
+
+  const out: FlowRow[] = [];
+  const walk = (parent: string | null, depth: number): void => {
+    for (const s of byParent.get(parent) ?? []) {
+      out.push({ type: "span", span: s, depth, children: byParent.get(s.id) ?? [] });
+      walk(s.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
+}
+
+/**
+ * The three steps worth opening a run on, derived from the spans already
+ * loaded: where it broke, where the time went, where the money went.
+ */
+export interface Hotspots {
+  errorId: string | null;
+  slowestId: string | null;
+  costliestId: string | null;
+}
+
+export function hotspots(spans: SpanRecord[]): Hotspots {
+  const ids = new Set(spans.map((s) => s.id));
+  const byParent = new Map<string | null, SpanRecord[]>();
+  for (const s of spans) {
+    const key = s.parentSpanId && ids.has(s.parentSpanId) ? s.parentSpanId : null;
+    byParent.get(key)?.push(s) ?? byParent.set(key, [s]);
+  }
+  const nonRoot = spans.filter((s) => s.parentSpanId && ids.has(s.parentSpanId));
+
+  let slowest: SpanRecord | null = null;
+  let slowestMs = -1;
+  for (const s of nonRoot) {
+    const ms = selfTime(s, byParent.get(s.id) ?? []);
+    if (ms > slowestMs) {
+      slowestMs = ms;
+      slowest = s;
+    }
+  }
+  const costliest = spans
+    .filter((s) => s.cost != null)
+    .sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0))[0];
+
+  return {
+    errorId: deepestError(spans),
+    slowestId: slowest?.id ?? null,
+    costliestId: costliest?.id ?? null,
+  };
+}
+
+/**
+ * Where it actually broke. A failure propagates up every ancestor, so the root
+ * reports `error` too; the deepest failing span is the one worth opening on.
+ */
+function deepestError(spans: SpanRecord[]): string | null {
   const byId = new Map(spans.map((s) => [s.id, s]));
-  const expandKeys = new Set<string>();
-  // Prefer the DEEPEST error — the root also errors by propagation, but the
-  // leaf is where it actually broke.
   let best: { id: string; depth: number; startTime: number } | null = null;
   for (const s of spans) {
     if (s.status !== "error") continue;
     let depth = 0;
-    let cur: SpanRecord | undefined = s;
+    let cur = s.parentSpanId ? byId.get(s.parentSpanId) : undefined;
     while (cur) {
-      expandKeys.add(cur.id);
+      depth++;
       cur = cur.parentSpanId ? byId.get(cur.parentSpanId) : undefined;
-      if (cur) depth++;
     }
     if (!best || depth > best.depth || (depth === best.depth && s.startTime < best.startTime)) {
       best = { id: s.id, depth, startTime: s.startTime };
     }
   }
-  return { expandKeys, firstErrorId: best?.id ?? null };
+  return best?.id ?? null;
 }
 
 /** Message-shaped payload detection: renders chat instead of raw JSON. */

@@ -5,77 +5,140 @@ import type { ChartData, ChartOptions } from "chart.js";
 import "./chart.js";
 import { api, fmtInt, fmtMoney } from "./api.js";
 import type { CostGroup, CostSummary } from "./types.js";
+import { useTheme } from "./theme.js";
+import { ToggleGroup } from "./ui/ToggleGroup.js";
+import { EnvFilter, useEnvironment } from "./ui/EnvFilter.js";
+import { Loading, Skeleton } from "./ui/Skeleton.js";
 
-// Neutral lightness ramp, assigned by cost rank: the biggest spender is
-// brightest. Structure through value, not hue. Overflow ranks → darkest gray.
-const MODEL_COLORS = ["#e2e2e2", "#a8a8a8", "#767676", "#525252"];
-const OTHER_COLOR = "#3a3a3a";
+// Neutral lightness ramp, assigned by cost rank: the biggest spender carries the
+// most contrast against the ground. Structure through value, not hue, so the
+// chart stays hueless like the rest of the chrome. Overflow ranks → faintest.
+const RAMP = {
+  dark: { series: ["#e2e2e2", "#a8a8a8", "#767676", "#525252"], other: "#3a3a3a" },
+  light: { series: ["#26292c", "#5a6065", "#8b9198", "#b4b9bd"], other: "#d2d6d9" },
+} as const;
 
-const WINDOWS = [7, 14, 30] as const;
+const CHART_CHROME = {
+  dark: { popup: "#1c1f21", line: "#ffffff1f", grid: "#ffffff0f", fg: "#e9eaeb", muted: "#989ca0" },
+  light: { popup: "#ffffff", line: "#00000024", grid: "#00000012", fg: "#15181a", muted: "#5a6065" },
+} as const;
 
-export function CostView({ environment }: { environment?: string }) {
-  const [days, setDays] = useState<(typeof WINDOWS)[number]>(14);
+const WINDOWS = ["7", "14", "30"] as const;
+type Window = (typeof WINDOWS)[number];
+
+export function CostView() {
+  const [days, setDays] = useState<Window>("14");
+  const { resolved } = useTheme();
+  const { env, value: envValue, setEnv, environments } = useEnvironment();
+
   const cost = useQuery({
-    queryKey: ["cost", days, environment],
-    queryFn: () => api.cost(days, environment),
+    queryKey: ["cost", days, env],
+    queryFn: () => api.cost(Number(days), env),
   });
 
   const colorForModel = useMemo(() => {
+    const ramp = RAMP[resolved];
     const map = new Map<string | null, string>();
     (cost.data?.byModel ?? []).forEach((m, i) => {
-      map.set(m.key, i < MODEL_COLORS.length ? MODEL_COLORS[i]! : OTHER_COLOR);
+      map.set(m.key, i < ramp.series.length ? ramp.series[i]! : ramp.other);
     });
-    return (key: string | null) => map.get(key) ?? OTHER_COLOR;
-  }, [cost.data]);
+    return (key: string | null) => map.get(key) ?? ramp.other;
+  }, [cost.data, resolved]);
 
   return (
-    <div className="min-w-0 flex-1 overflow-y-auto px-8 pt-6 pb-16">
-      <div className="mx-auto max-w-[900px]">
-        <div className="mb-5 flex items-center gap-3">
-          <h1 className="text-[15px] font-semibold">Cost</h1>
-          <span className="text-[12px] text-faint">USD</span>
-          <div className="ml-auto flex gap-0.5 rounded-md bg-panel p-0.5">
-            {WINDOWS.map((w) => (
-              <button
-                key={w}
-                onClick={() => setDays(w)}
-                className={`rounded px-2.5 py-1 font-mono text-[12px] ${
-                  days === w ? "bg-panel2 text-fg" : "text-faint hover:text-muted"
-                }`}
-              >
-                {w}d
-              </button>
-            ))}
-          </div>
-        </div>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5">
+        <ToggleGroup
+          ariaLabel="Time window"
+          value={days}
+          onChange={setDays}
+          options={WINDOWS.map((w) => ({ value: w, label: `${w}d` }))}
+        />
+        <span className="text-[12px] text-faint">USD, last {days} days</span>
+        <span className="flex-1" />
+        <EnvFilter value={envValue} onChange={setEnv} environments={environments} />
+      </div>
 
-        {cost.isLoading && <div className="text-faint">loading…</div>}
-        {cost.data && cost.data.totals.cost === 0 && (
-          <div className="rounded-md bg-panel px-4 py-8 text-center text-faint">
-            No cost recorded in this window. Spans need a model with known pricing, or an explicit cost.
-          </div>
-        )}
-        {cost.data && cost.data.totals.cost > 0 && (
-          <>
-            <div className="mb-6 grid grid-cols-3 gap-3">
-              <Tile label="total cost" value={fmtMoney(cost.data.totals.cost)} accent />
-              <Tile
-                label="input tokens"
-                value={fmtInt(cost.data.totals.inputTokens)}
-                sub={cachedShare(cost.data.totals)}
-              />
-              <Tile label="output tokens" value={fmtInt(cost.data.totals.outputTokens)} />
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-4 pb-16">
+        <div className="max-w-[900px]">
+          {cost.isLoading && <CostSkeleton />}
+          {cost.data && cost.data.totals.cost === 0 && (
+            <div className="rounded-md border border-line bg-panel px-4 py-8 text-center text-faint">
+              No cost recorded in this window. Spans need a model with known pricing, or an explicit
+              cost.
             </div>
+          )}
+          {cost.data && cost.data.totals.cost > 0 && (
+            <>
+              <div className="mb-6 grid grid-cols-3 gap-3">
+                <Tile label="total cost" value={fmtMoney(cost.data.totals.cost)} accent />
+                <Tile
+                  label="input tokens"
+                  value={fmtInt(cost.data.totals.inputTokens)}
+                  sub={cachedShare(cost.data.totals)}
+                />
+                <Tile label="output tokens" value={fmtInt(cost.data.totals.outputTokens)} />
+              </div>
 
-            <CostChart summary={cost.data} colorForModel={colorForModel} />
+              <CostChart summary={cost.data} colorForModel={colorForModel} theme={resolved} />
 
-            <Legend models={cost.data.byModel} colorForModel={colorForModel} total={cost.data.totals.cost} />
+              <Legend
+                models={cost.data.byModel}
+                colorForModel={colorForModel}
+                total={cost.data.totals.cost}
+              />
 
-            <FunctionTable functions={cost.data.byFunction} total={cost.data.totals.cost} />
-          </>
-        )}
+              <FunctionTable functions={cost.data.byFunction} total={cost.data.totals.cost} />
+            </>
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+// Bar heights trace a plausible spend curve rather than a flat block, so the
+// placeholder reads as a chart before the chart arrives.
+const BAR_HEIGHTS = [38, 55, 47, 72, 61, 84, 69, 91, 58, 76, 64, 88, 51, 70];
+
+function CostSkeleton() {
+  return (
+    <Loading label="Loading cost">
+      <div className="mb-6 grid grid-cols-3 gap-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="rounded-md border border-line bg-panel px-4 py-3">
+            <Skeleton w={72} h={9} />
+            <Skeleton w={i === 0 ? 96 : 78} h={22} className="mt-2" />
+          </div>
+        ))}
+      </div>
+      <div className="mb-3 rounded-md border border-line bg-panel p-4">
+        <div className="flex h-52 items-end gap-1.5">
+          {BAR_HEIGHTS.map((h, i) => (
+            <Skeleton key={i} h={`${h}%`} className="flex-1" />
+          ))}
+        </div>
+      </div>
+      <div className="mb-6 flex flex-wrap gap-x-5 gap-y-1.5">
+        {[104, 128, 92].map((w, i) => (
+          <span key={i} className="flex items-center gap-2">
+            <Skeleton w={10} h={10} />
+            <Skeleton w={w} h={11} />
+          </span>
+        ))}
+      </div>
+      <Skeleton w={72} h={9} className="mb-2" />
+      <div className="overflow-hidden rounded-md border border-line bg-panel">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="flex items-center gap-3 px-4 py-3">
+            <Skeleton w={i % 2 ? 132 : 168} h={12} />
+            <Skeleton w={44} h={11} className="ml-auto" />
+            <Skeleton w={62} h={11} />
+            <Skeleton w={56} h={12} />
+          </div>
+        ))}
+      </div>
+    </Loading>
   );
 }
 
@@ -96,7 +159,7 @@ function Tile({
   accent?: boolean;
 }) {
   return (
-    <div className="rounded-md bg-panel px-4 py-3">
+    <div className="rounded-md border border-line bg-panel px-4 py-3">
       <div className="font-mono text-[11px] tracking-wider text-faint uppercase">{label}</div>
       <div className={`mt-1 text-2xl tabular-nums ${accent ? "font-semibold" : "font-medium text-muted"}`}>
         {value}
@@ -119,10 +182,13 @@ function utcDayRange(n: number): string[] {
 function CostChart({
   summary,
   colorForModel,
+  theme,
 }: {
   summary: CostSummary;
   colorForModel: (key: string | null) => string;
+  theme: "light" | "dark";
 }) {
+  const chrome = CHART_CHROME[theme];
   const range = utcDayRange(summary.windowDays);
 
   const { data, options } = useMemo(() => {
@@ -153,12 +219,12 @@ function CostChart({
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: "#202020",
-          borderColor: "#2a2a2a",
+          backgroundColor: chrome.popup,
+          borderColor: chrome.line,
           borderWidth: 1,
           padding: 10,
-          titleColor: "#ececec",
-          bodyColor: "#989898",
+          titleColor: chrome.fg,
+          bodyColor: chrome.muted,
           callbacks: {
             label: (ctx) => `${ctx.dataset.label}: ${fmtMoney(ctx.parsed.y)}`,
           },
@@ -169,23 +235,23 @@ function CostChart({
         x: {
           stacked: true,
           grid: { display: false },
-          ticks: { maxRotation: 0, autoSkipPadding: 16 },
+          ticks: { maxRotation: 0, autoSkipPadding: 16, color: chrome.muted },
           border: { display: false },
         },
         y: {
           stacked: true,
-          grid: { color: "#ffffff0a" },
+          grid: { color: chrome.grid },
           border: { display: false },
-          ticks: { callback: (v) => fmtMoney(Number(v)) },
+          ticks: { callback: (v) => fmtMoney(Number(v)), color: chrome.muted },
         },
       },
     };
 
     return { data: chartData, options: chartOptions };
-  }, [summary, colorForModel, range]);
+  }, [summary, colorForModel, range, chrome]);
 
   return (
-    <div className="mb-3 rounded-md bg-panel p-4">
+    <div className="mb-3 rounded-md border border-line bg-panel p-4">
       <div className="h-52">
         <Bar data={data} options={options} />
       </div>
@@ -221,13 +287,13 @@ function FunctionTable({ functions, total }: { functions: CostGroup[]; total: nu
   return (
     <div>
       <h2 className="mb-2 font-mono text-[11px] tracking-wider text-faint uppercase">by function</h2>
-      <div className="overflow-hidden rounded-md bg-panel">
+      <div className="overflow-hidden rounded-md border border-line bg-panel">
         {functions.map((f) => {
           const share = (f.cost / total) * 100;
           return (
             <div key={String(f.key)} className="relative flex items-center gap-3 px-4 py-2.5">
               <span
-                className="absolute inset-y-0 left-0 bg-accent/8"
+                className="absolute inset-y-0 left-0 bg-fg/[0.055]"
                 style={{ width: `${share}%` }}
                 aria-hidden
               />

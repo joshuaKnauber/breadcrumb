@@ -3,7 +3,10 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import { App } from "./App.js";
+import { initTheme } from "./theme.js";
 import "./index.css";
+
+initTheme();
 
 // The app is served with an injected <base href> at its mount path; react-router
 // needs that path as its basename so links resolve under the mount.

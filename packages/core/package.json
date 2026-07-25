@@ -1,8 +1,15 @@
 {
   "name": "@breadcrumb-sh/core",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Embeddable LLM tracing for TypeScript apps. Your database, your deployment, your UI.",
   "license": "MIT",
+  "homepage": "https://breadcrumb.sh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joshuaKnauber/breadcrumb.git",
+    "directory": "packages/core"
+  },
+  "bugs": "https://github.com/joshuaKnauber/breadcrumb/issues",
   "type": "module",
   "files": [
     "dist"

@@ -1,25 +1,40 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  --color-bg: #0d0d0d;
-  --color-bg-elevated: #17181a;
-  --color-bg-muted: #1d1f22;
-  --color-surface: #25282c;
+  /* Surfaces, darkest to lightest. Shared with the dashboard. */
+  --color-canvas: #0e0f10;
+  --color-plate: #151719;
+  --color-panel: #1c1f21;
+  --color-raised: #272a2d;
 
-  --color-border: #2a2d31;
-  --color-border-strong: #3a3e44;
+  /* Hairlines are alpha, so they hold over any surface above. */
+  --color-line: #ffffff12;
+  --color-line-strong: #ffffff1f;
 
-  --color-fg: #e4e4e7;
-  --color-fg-muted: #a1a1aa;
-  --color-fg-subtle: #71717a;
-  --color-fg-faint: #52525b;
+  --color-fg: #e9eaeb;
+  --color-muted: #989ca0;
+  --color-faint: #63676b;
 
-  /* Breadcrumb's trail — a warm tan, used sparingly. */
-  --color-accent: #c4b5a0;
-  --color-accent-muted: #8a7e6c;
+  /* Colour is a measurement. Red is failure, the ramp is share of runtime. */
+  --color-err: #e0736a;
+  --color-err-bg: #e0736a1a;
+  --color-heat-mid: #d9a441;
+  --color-heat-hi: #d4663a;
+  --color-neutral-bar: #5e6367;
+
+  /* Aliases kept so the docs pages keep resolving. */
+  --color-bg: var(--color-canvas);
+  --color-bg-elevated: var(--color-panel);
+  --color-bg-muted: var(--color-plate);
+  --color-surface: var(--color-raised);
+  --color-border: var(--color-line);
+  --color-border-strong: var(--color-line-strong);
+  --color-fg-muted: var(--color-muted);
+  --color-fg-subtle: #7b7f84;
+  --color-fg-faint: var(--color-faint);
 }
 
 :root {
@@ -41,9 +56,9 @@ html {
 /* Shiki blocks (astro <Code> + fenced MDX): neutral panel, mono, no theme bg. */
 .astro-code {
   position: relative;
-  background-color: var(--color-bg) !important;
+  background-color: var(--color-plate) !important;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 1rem 1.25rem;
   font-size: 0.82rem;
   line-height: 1.65;
@@ -77,39 +92,74 @@ html {
   color: var(--color-fg);
 }
 .copy-code.copied {
-  color: var(--color-accent);
+  color: var(--color-fg);
   opacity: 1;
 }
 
-/* Docs prose */
+/* A label that swaps on .copied without the button resizing: both states share
+   one grid cell, so the wider one sets the width. */
+.swap {
+  display: grid;
+  text-align: left;
+}
+.swap > span {
+  grid-area: 1 / 1;
+  transition: opacity 0.12s ease;
+}
+.swap > span:last-child,
+.copied .swap > span:first-child {
+  opacity: 0;
+}
+.copied .swap > span:last-child {
+  opacity: 1;
+}
+
+/* Docs prose. Same scale as the homepage, which is written as a doc too. */
 .docs-content {
-  color: var(--color-fg-muted);
-  font-size: 0.95rem;
-  line-height: 1.7;
+  color: var(--color-muted);
+  font-size: 15.5px;
+  line-height: 1.75;
 }
 .docs-content > :first-child {
   margin-top: 0;
 }
 .docs-content h1 {
   color: var(--color-fg);
-  font-size: 2rem;
-  font-weight: 500;
-  letter-spacing: -0.02em;
+  font-size: 27px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
   line-height: 1.2;
   margin: 0 0 1rem;
 }
 .docs-content h2 {
   color: var(--color-fg);
-  font-size: 1.25rem;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  margin: 3rem 0 1rem;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin: 54px 0 14px;
 }
 .docs-content h3 {
   color: var(--color-fg);
-  font-size: 1rem;
-  font-weight: 500;
-  margin: 2rem 0 0.5rem;
+  font-size: 15px;
+  font-weight: 600;
+  margin: 32px 0 8px;
+}
+/* The markdown source shows through, so a heading's level is visible. */
+.docs-content h1::before,
+.docs-content h2::before,
+.docs-content h3::before {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  color: var(--color-faint);
+}
+.docs-content h1::before {
+  content: "# ";
+}
+.docs-content h2::before {
+  content: "## ";
+}
+.docs-content h3::before {
+  content: "### ";
 }
 .docs-content p {
   margin: 1rem 0;
@@ -130,27 +180,32 @@ html {
 .docs-content ul,
 .docs-content ol {
   margin: 1rem 0;
-  padding-left: 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.45rem;
 }
 .docs-content ul {
-  list-style: disc;
+  padding: 0;
+  list-style: none;
+}
+.docs-content ul > li::before {
+  content: "- ";
+  font-family: var(--font-mono);
+  color: var(--color-faint);
 }
 .docs-content ol {
+  padding-left: 1.25rem;
   list-style: decimal;
 }
 .docs-content li::marker {
-  color: var(--color-fg-faint);
+  color: var(--color-faint);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
 }
 .docs-content :not(pre) > code {
   font-family: var(--font-mono);
-  font-size: 0.82em;
-  background: var(--color-bg-muted);
+  font-size: 0.84em;
   color: var(--color-fg);
-  padding: 0.15em 0.4em;
-  border-radius: 3px;
 }
 .docs-content pre {
   margin: 1.5rem 0;
@@ -222,11 +277,11 @@ html {
   --alert: #6cc58a;
 }
 .docs-content .markdown-alert-important {
-  --alert: #c4b5a0;
+  --alert: var(--color-fg);
 }
 .docs-content .markdown-alert-warning {
-  --alert: #d0a85f;
+  --alert: var(--color-heat-mid);
 }
 .docs-content .markdown-alert-caution {
-  --alert: #e0654f;
+  --alert: var(--color-err);
 }

@@ -1,8 +1,15 @@
 {
   "name": "@breadcrumb-sh/react",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "React hooks for building a custom Breadcrumb tracing UI over your own data.",
   "license": "MIT",
+  "homepage": "https://breadcrumb.sh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joshuaKnauber/breadcrumb.git",
+    "directory": "packages/react"
+  },
+  "bugs": "https://github.com/joshuaKnauber/breadcrumb/issues",
   "type": "module",
   "files": [
     "dist"
@@ -22,7 +29,7 @@
     "@tanstack/react-query": ">=5"
   },
   "dependencies": {
-    "@breadcrumb-sh/core": "0.0.0"
+    "@breadcrumb-sh/core": "0.0.1"
   },
   "devDependencies": {
     "@tanstack/react-query": "^5.62.0",

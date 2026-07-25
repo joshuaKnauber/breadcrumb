@@ -55,9 +55,11 @@ const { items } = await client.listSessions({ status: "error" });
 The view logic — nobody should rebuild span-tree assembly. Import it and render your own components.
 
 ```ts
-import { buildTree, asMessages, fmtCost } from "@breadcrumb-sh/core/kit";
+import { flowRows, selfTime, hotspots, asMessages, fmtCost } from "@breadcrumb-sh/core/kit";
 
-const tree = buildTree(spans);        // nested spans, same-name siblings grouped
+const rows = flowRows(spans);         // denoised, depth-indexed rows
+const { errorId, slowestId } = hotspots(spans);
+selfTime(span, children);             // extent minus what the children covered
 const chat = asMessages(span.input);  // detect + parse chat-shaped payloads
 fmtCost(0.0042);                       // "$0.0042"
 ```

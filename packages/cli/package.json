@@ -1,8 +1,15 @@
 {
   "name": "@breadcrumb-sh/cli",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "CLI for breadcrumb — local dev server and migrations.",
   "license": "MIT",
+  "homepage": "https://breadcrumb.sh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joshuaKnauber/breadcrumb.git",
+    "directory": "packages/cli"
+  },
+  "bugs": "https://github.com/joshuaKnauber/breadcrumb/issues",
   "type": "module",
   "bin": {
     "breadcrumb": "./dist/index.mjs"
@@ -15,7 +22,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@breadcrumb-sh/core": "0.0.0",
+    "@breadcrumb-sh/core": "0.0.1",
     "better-sqlite3": "^11.7.0",
     "pg": "^8.22.0"
   },

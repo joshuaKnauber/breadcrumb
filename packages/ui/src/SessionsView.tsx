@@ -1,39 +1,145 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { api, fmtCost, fmtMs, fmtTokens, fmtTime } from "./api.js";
+import { ArrowRight, CaretRight, MagnifyingGlass, XCircle } from "@phosphor-icons/react";
+import { api, fmtCost, fmtMs, fmtTime, fmtTokens } from "./api.js";
 import type { RunSummary, SessionSummary } from "./types.js";
 import { preview } from "@breadcrumb-sh/core/kit";
-import { TraceExplorer } from "./TraceExplorer.js";
+import { Select } from "./ui/Select.js";
+import { EnvFilter, useEnvironment } from "./ui/EnvFilter.js";
+import { Loading, Skeleton } from "./ui/Skeleton.js";
 
-export function SessionsView({ environment }: { environment?: string }) {
+type StatusFilter = "all" | "error";
+
+const GRID = "grid-cols-[minmax(0,1fr)_78px_66px_66px]";
+
+export function SessionsView() {
   const navigate = useNavigate();
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [query, setQuery] = useState("");
+  const { env, value: envValue, setEnv, environments } = useEnvironment();
+
   const sessions = useQuery({
-    queryKey: ["sessions", environment],
-    queryFn: () => api.sessions(environment),
+    queryKey: ["sessions", env],
+    queryFn: () => api.sessions(env),
   });
 
+  const rows = useMemo(() => {
+    let items = sessions.data ?? [];
+    if (status === "error") items = items.filter((s) => s.errorCount > 0);
+    const q = query.trim().toLowerCase();
+    if (q) {
+      items = items.filter((s) =>
+        [s.userId, s.sessionId, s.sessionKey, s.failName]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q))
+      );
+    }
+    return items;
+  }, [sessions.data, status, query]);
+
+  const failing = (sessions.data ?? []).filter((s) => s.errorCount > 0).length;
+
   return (
-    <div className="min-w-0 flex-1 overflow-y-auto px-8 pt-6 pb-16">
-      <div className="mx-auto max-w-[820px]">
-        <h1 className="mb-4 text-[15px] font-semibold">Sessions</h1>
-        {sessions.isLoading && <div className="text-faint">loading…</div>}
-        {sessions.data?.length === 0 && (
-          <div className="rounded-md bg-panel/50 px-4 py-10 text-center text-faint">
-            No traces yet. Send some and they'll show up here.
-          </div>
-        )}
-        <div className="grid gap-px">
-          {sessions.data?.map((s) => (
-            <SessionRow
-              key={s.sessionKey}
-              session={s}
-              onOpen={() => navigate(`/sessions/${encodeURIComponent(s.sessionKey)}`)}
-            />
-          ))}
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5">
+        <label className="relative flex min-w-[180px] flex-1 items-center">
+          <MagnifyingGlass
+            size={13}
+            className="pointer-events-none absolute left-2.5 text-faint"
+            aria-hidden
+          />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search sessions, users, errors"
+            aria-label="Search sessions"
+            className="w-full rounded-md border border-line bg-panel py-1.5 pr-2.5 pl-7 text-[12.5px] text-fg placeholder:text-faint focus:border-line-strong focus:outline-none"
+          />
+        </label>
+        <Select
+          label="Status"
+          value={status}
+          onChange={(v) => setStatus(v as StatusFilter)}
+          items={[
+            { value: "all", label: "All sessions" },
+            { value: "error", label: `Failed only${failing ? ` (${failing})` : ""}` },
+          ]}
+        />
+        <EnvFilter value={envValue} onChange={setEnv} environments={environments} />
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pt-1 pb-6">
+        <div className="max-w-[1000px]">
+          {sessions.isLoading && <SessionsSkeleton />}
+
+          {sessions.data?.length === 0 && (
+            <Empty>No traces yet. Send some and they'll show up here.</Empty>
+          )}
+
+          {sessions.data && sessions.data.length > 0 && rows.length === 0 && (
+            <Empty>No sessions match this filter.</Empty>
+          )}
+
+          {rows.length > 0 && (
+            <>
+              <div
+                className={`mb-1 grid ${GRID} items-center gap-3.5 border-b border-line px-2 pt-2 pb-1.5 font-mono text-[9.5px] tracking-[0.12em] text-faint uppercase`}
+              >
+                <span>Session</span>
+                <span className="text-right">Runs</span>
+                <span className="text-right">Cost</span>
+                <span className="text-right">Last seen</span>
+              </div>
+              {rows.map((s) => (
+                <SessionRow
+                  key={s.sessionKey}
+                  session={s}
+                  onOpen={() => navigate(`/sessions/${encodeURIComponent(s.sessionKey)}`)}
+                />
+              ))}
+            </>
+          )}
         </div>
       </div>
     </div>
+  );
+}
+
+function Empty({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mt-4 rounded-md border border-line bg-panel px-4 py-10 text-center text-faint">
+      {children}
+    </div>
+  );
+}
+
+// Fixed widths — a skeleton that shuffles on every render reads as broken.
+const NAME_WIDTHS = [172, 128, 205, 149, 116, 188, 141, 162];
+
+function SessionsSkeleton() {
+  return (
+    <Loading label="Loading sessions">
+      <div
+        className={`mb-1 grid ${GRID} items-center gap-3.5 border-b border-line px-2 pt-2 pb-1.5`}
+      >
+        <Skeleton w={52} h={8} />
+        <Skeleton w={28} h={8} className="ml-auto" />
+        <Skeleton w={28} h={8} className="ml-auto" />
+        <Skeleton w={44} h={8} className="ml-auto" />
+      </div>
+      {NAME_WIDTHS.map((w, i) => (
+        <div key={i} className={`grid ${GRID} items-center gap-3.5 px-2 py-2`}>
+          <span className="flex items-center gap-2.5">
+            <Skeleton w={7} h={7} className="rounded-full" />
+            <Skeleton w={w} h={12} />
+          </span>
+          <Skeleton w={24} h={11} className="ml-auto" />
+          <Skeleton w={40} h={11} className="ml-auto" />
+          <Skeleton w={48} h={11} className="ml-auto" />
+        </div>
+      ))}
+    </Loading>
   );
 }
 
@@ -42,20 +148,29 @@ function SessionRow({ session: s, onOpen }: { session: SessionSummary; onOpen: (
   return (
     <button
       onClick={onOpen}
-      className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-4 rounded-md px-3.5 py-2.5 hover:bg-panel/60"
+      className={`grid w-full ${GRID} items-center gap-3.5 rounded-md px-2 py-2 hover:bg-hover`}
     >
-      <span className="flex min-w-0 items-baseline gap-3">
-        <span className="truncate font-medium">
+      <span className="flex min-w-0 items-center gap-2.5">
+        <span className={`h-[7px] w-[7px] flex-none rounded-full ${failed ? "bg-err" : "bg-bar"}`} />
+        <span className="truncate text-[12.5px] font-medium">
           {s.userId ?? s.sessionId ?? s.sessionKey.slice(0, 8)}
         </span>
         {failed && (
-          <span className="truncate font-mono text-[11.5px] text-err">✗ {s.failName ?? "error"}</span>
+          <span className="flex min-w-0 items-center gap-1 font-mono text-[11px] text-err">
+            <XCircle size={12} weight="fill" className="flex-none" />
+            <span className="truncate">{s.failName ?? "error"}</span>
+          </span>
         )}
       </span>
-      <span className="flex items-baseline gap-4 font-mono text-[11.5px] whitespace-nowrap text-faint tabular-nums">
-        <span className="w-14 text-right">{s.runCount === 1 ? "1 run" : `${s.runCount} runs`}</span>
-        <span className="w-16 text-right">{s.cost != null ? fmtCost(s.cost) : "–"}</span>
-        <span className="w-18 text-right">{fmtTime(s.endTime ?? s.startTime)}</span>
+      <span className="text-right font-mono text-[11.5px] text-muted tabular-nums">
+        {s.runCount}
+        {failed && <span className="text-err"> · {s.errorCount}✗</span>}
+      </span>
+      <span className="text-right font-mono text-[11.5px] text-fg tabular-nums">
+        {s.cost != null ? fmtCost(s.cost) : "–"}
+      </span>
+      <span className="text-right font-mono text-[11.5px] text-muted tabular-nums">
+        {fmtTime(s.endTime ?? s.startTime)}
       </span>
     </button>
   );
@@ -63,121 +178,130 @@ function SessionRow({ session: s, onOpen }: { session: SessionSummary; onOpen: (
 
 export function SessionDetail() {
   const { sessionKey = "" } = useParams();
-  const [openRun, setOpenRun] = useState<{ traceId: string; failed: boolean } | null>(null);
+  const navigate = useNavigate();
 
   const sessions = useQuery({ queryKey: ["sessions", undefined], queryFn: () => api.sessions() });
   const session = sessions.data?.find((s) => s.sessionKey === sessionKey);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpenRun(null);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, []);
-
-  return (
-    <div className="flex min-h-0 min-w-0 flex-1">
-      <RunFeed
-        sessionKey={sessionKey}
-        session={session}
-        openRun={openRun?.traceId ?? null}
-        onToggleRun={(r) =>
-          setOpenRun((cur) =>
-            cur?.traceId === r.traceId ? null : { traceId: r.traceId, failed: r.errorCount > 0 }
-          )
-        }
-      />
-      <TraceExplorer
-        traceId={openRun?.traceId ?? null}
-        jumpToError={openRun?.failed ?? false}
-        onClose={() => setOpenRun(null)}
-      />
-    </div>
-  );
-}
-
-function RunFeed({
-  sessionKey,
-  session,
-  openRun,
-  onToggleRun,
-}: {
-  sessionKey: string;
-  session: SessionSummary | undefined;
-  openRun: string | null;
-  onToggleRun: (r: RunSummary) => void;
-}) {
   const runs = useQuery({
     queryKey: ["runs", sessionKey],
     queryFn: () => api.runs(sessionKey),
   });
 
-  return (
-    <div className="min-w-0 flex-1 overflow-y-auto px-8 pt-6 pb-16">
-      <div className="mx-auto max-w-[680px]">
-        <div className="mb-5 flex items-baseline gap-3 text-[13px] text-faint">
-          <Link to="/" className="text-faint hover:text-muted">
-            Sessions
-          </Link>
-          <span>/</span>
-          <b className="text-[15px] font-semibold text-fg">
-            {session?.userId ?? session?.sessionId ?? sessionKey.slice(0, 8)}
-          </b>
-          <span className="flex-1" />
-          {session && (
-            <span className="font-mono text-xs">
-              {fmtTokens(session.inputTokens, session.outputTokens)} tok
-              {session.cost != null ? ` · ${fmtCost(session.cost)}` : ""}
-            </span>
-          )}
-        </div>
+  const slowest = useMemo(() => {
+    let best = 0;
+    for (const r of runs.data ?? []) {
+      if (r.endTime != null) best = Math.max(best, r.endTime - r.startTime);
+    }
+    return best || null;
+  }, [runs.data]);
 
-        {runs.data?.map((r) => (
-          <RunCard key={r.traceId} run={r} open={openRun === r.traceId} onToggle={() => onToggleRun(r)} />
-        ))}
-        {runs.isLoading && <div className="text-faint">loading…</div>}
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="flex items-center gap-1.5 border-b border-line px-4 py-2.5 text-[12.5px] text-faint">
+        <Link to="/" className="text-muted hover:text-fg">
+          Sessions
+        </Link>
+        <CaretRight size={10} weight="bold" aria-hidden />
+        <span className="truncate font-medium text-fg">
+          {session?.userId ?? session?.sessionId ?? sessionKey.slice(0, 8)}
+        </span>
+        <span className="flex-1" />
+        {session && (
+          <span className="font-mono text-[11.5px] text-muted tabular-nums">
+            {fmtTokens(session.inputTokens, session.outputTokens)} tok
+            {session.cost != null ? ` · ${fmtCost(session.cost)}` : ""}
+            {slowest != null ? ` · ${fmtMs(slowest)} slowest` : ""}
+          </span>
+        )}
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-4 pb-10">
+        <div className="max-w-[760px]">
+          {runs.isLoading && <RunsSkeleton />}
+          {runs.data?.map((r) => (
+            <RunCard
+              key={r.traceId}
+              run={r}
+              onOpen={() =>
+                navigate(
+                  `/sessions/${encodeURIComponent(sessionKey)}/traces/${encodeURIComponent(r.traceId)}`
+                )
+              }
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
-function RunCard({ run, open, onToggle }: { run: RunSummary; open: boolean; onToggle: () => void }) {
-  const failed = run.errorCount > 0;
+function RunsSkeleton() {
   return (
-    <div className="my-3 overflow-hidden rounded-md bg-panel">
-      <div className="flex items-baseline gap-2.5 px-4 pt-3">
-        <h3 className="font-semibold">{run.name}</h3>
-        <span className="ml-auto font-mono text-[11px] text-faint">{fmtTime(run.startTime)}</span>
+    <Loading label="Loading runs">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="mb-2.5 overflow-hidden rounded-md border border-line bg-panel">
+          <div className="flex items-center gap-2.5 px-3.5 pt-3">
+            <Skeleton w={7} h={7} className="rounded-full" />
+            <Skeleton w={i === 1 ? 118 : 154} h={13} />
+            <Skeleton w={46} h={10} className="ml-auto" />
+          </div>
+          <div className="grid gap-2 px-3.5 pt-3 pb-3">
+            <Skeleton w="72%" h={12} />
+            <Skeleton w={i === 2 ? "54%" : "88%"} h={12} />
+          </div>
+          <div className="flex gap-3.5 border-t border-line px-3.5 py-2">
+            {[46, 38, 62, 44].map((w, j) => (
+              <Skeleton key={j} w={w} h={10} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </Loading>
+  );
+}
+
+function RunCard({ run, onOpen }: { run: RunSummary; onOpen: () => void }) {
+  const failed = run.errorCount > 0;
+  const ms = run.endTime != null ? run.endTime - run.startTime : null;
+  return (
+    <button
+      onClick={onOpen}
+      className="mb-2.5 block w-full overflow-hidden rounded-md border border-line bg-panel text-left hover:border-line-strong"
+    >
+      <div className="flex items-baseline gap-2.5 px-3.5 pt-2.5">
+        <span className={`h-[7px] w-[7px] flex-none rounded-full ${failed ? "bg-err" : "bg-bar"}`} />
+        <h3 className="text-[13px] font-semibold">{run.name}</h3>
+        <span className="ml-auto font-mono text-[11px] text-faint tabular-nums">
+          {fmtTime(run.startTime)}
+        </span>
       </div>
-      <div className="grid gap-1 px-4 pt-1.5 pb-2 text-[13px]">
+
+      <div className="grid gap-1 px-3.5 pt-1.5 pb-2 text-[12.5px]">
         <div className="truncate text-muted">
-          <PayloadLabel>in</PayloadLabel>
+          <Label>in</Label>
           {preview(run.input)}
         </div>
-        <div className={failed ? "text-err" : "text-fg"}>
-          <PayloadLabel>out</PayloadLabel>
+        <div className={failed ? "text-err" : ""}>
+          <Label>out</Label>
           {failed ? `✗ ${run.failName}: ${run.failError ?? "error"}` : preview(run.output, 400)}
         </div>
       </div>
-      <button
-        onClick={onToggle}
-        aria-expanded={open}
-        className={`mx-2.5 mb-2 inline-flex items-center gap-3.5 rounded px-1.5 py-1 font-mono text-[11.5px] tabular-nums ${
-          open ? "bg-panel2 text-fg" : "text-faint hover:text-muted"
-        }`}
-      >
-        <span>{open ? "▾" : "▸"}</span>
+
+      <div className="flex items-center gap-3.5 border-t border-line px-3.5 py-1.5 font-mono text-[11px] text-faint tabular-nums">
         <span>{run.spanCount} steps</span>
-        <span>{fmtMs(run.endTime != null ? run.endTime - run.startTime : null)}</span>
+        <span>{fmtMs(ms)}</span>
         <span>{fmtTokens(run.inputTokens, run.outputTokens)} tok</span>
-        {failed ? <span className="text-err">✗ {run.failName}</span> : <span>{fmtCost(run.cost)}</span>}
-      </button>
-    </div>
+        <span>{fmtCost(run.cost)}</span>
+        <span className="ml-auto flex items-center gap-1 text-muted">
+          open trace <ArrowRight size={11} weight="bold" />
+        </span>
+      </div>
+    </button>
   );
 }
 
-function PayloadLabel({ children }: { children: string }) {
+function Label({ children }: { children: string }) {
   return (
     <b className="mr-2 font-mono text-[10.5px] font-medium tracking-wider text-faint uppercase">
       {children}

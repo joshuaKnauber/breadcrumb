@@ -6,25 +6,83 @@
 @import "@fontsource/geist-mono/latin-500.css";
 
 /*
- * Structure comes from surface layers (bg → plate → panel → panel2), not
- * borders: the sidebar sits on `bg`, content floats on a `plate`, and cards
- * raise from there. `line` is a near-invisible hairline reserved for pane
- * splits. The palette is true neutral gray — no hue. `accent` is just a
- * brighter neutral for emphasis; red is the one exception, for errors only.
+ * Structure comes from surface layers (canvas → plate → panel → raised), not
+ * borders; `line` is a hairline reserved for pane splits. Neutrals carry a
+ * whisper of cool so they read as chosen rather than inherited.
+ *
+ * Chrome is hueless. Color is a measurement: `err` only ever means failure, and
+ * the heat ramp (`heat-mid` → `heat-hi`) only ever means share of runtime. If a
+ * pixel is tinted, it is carrying information.
  */
 @theme {
-  --color-bg: #121212;
-  --color-plate: #191919;
-  --color-panel: #202020;
-  --color-panel2: #2a2a2a;
-  --color-line: #ffffff0d;
-  --color-fg: #ececec;
-  --color-muted: #989898;
-  --color-faint: #606060;
-  --color-accent: #d8d8d8;
-  --color-err: #cf6f68;
+  --color-canvas: #eef0f1;
+  --color-plate: #f8f9fa;
+  --color-panel: #ffffff;
+  --color-raised: #e6e9eb;
+  --color-line: #00000014;
+  --color-line-strong: #00000024;
+  --color-fg: #15181a;
+  --color-muted: #5a6065;
+  --color-faint: #8b9198;
+  --color-err: #c2453a;
+  --color-heat-hi: #b0491f;
+  --color-heat-mid: #9a7414;
+  --color-bar: #a8aeb3;
+  --color-hover: #00000008;
+  --color-sel: #00000010;
   --font-sans: "Instrument Sans", "Helvetica Neue", Arial, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/*
+ * Tailwind v4 resolves @theme vars once, so the dark palette is applied by
+ * redefining the same custom properties. `data-theme` is stamped by the toggle
+ * and must win over the OS preference in both directions.
+ */
+@layer base {
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --color-canvas: #0e0f10;
+      --color-plate: #151719;
+      --color-panel: #1c1f21;
+      --color-raised: #272a2d;
+      --color-line: #ffffff12;
+      --color-line-strong: #ffffff1f;
+      --color-fg: #e9eaeb;
+      --color-muted: #989ca0;
+      --color-faint: #63676b;
+      --color-err: #e0736a;
+      --color-heat-hi: #d4663a;
+      --color-heat-mid: #d9a441;
+      --color-bar: #5e6367;
+      --color-hover: #ffffff08;
+      --color-sel: #ffffff12;
+      color-scheme: dark;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --color-canvas: #0e0f10;
+    --color-plate: #151719;
+    --color-panel: #1c1f21;
+    --color-raised: #272a2d;
+    --color-line: #ffffff12;
+    --color-line-strong: #ffffff1f;
+    --color-fg: #e9eaeb;
+    --color-muted: #989ca0;
+    --color-faint: #63676b;
+    --color-err: #e0736a;
+    --color-heat-hi: #d4663a;
+    --color-heat-mid: #d9a441;
+    --color-bar: #5e6367;
+    --color-hover: #ffffff08;
+    --color-sel: #ffffff12;
+    color-scheme: dark;
+  }
+
+  :root[data-theme="light"] {
+    color-scheme: light;
+  }
 }
 
 html, body, #root {
@@ -32,8 +90,7 @@ html, body, #root {
 }
 
 body {
-  @apply bg-bg text-fg font-sans text-sm antialiased;
-  color-scheme: dark;
+  @apply bg-canvas text-fg font-sans text-[13px] antialiased;
 }
 
 button {
@@ -41,11 +98,41 @@ button {
   text-align: left;
 }
 
-button:focus-visible, select:focus-visible {
-  outline: 2px solid var(--color-accent);
+button:focus-visible,
+select:focus-visible,
+[role="option"]:focus-visible {
+  outline: 2px solid var(--color-fg);
   outline-offset: -2px;
+  border-radius: 3px;
+}
+
+/*
+ * Loading placeholders breathe rather than shimmer: a sweeping highlight needs a
+ * gradient, and gradients are the one thing the hueless palette can't afford.
+ */
+@keyframes bc-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.bc-skeleton {
+  animation: bc-breathe 1.5s ease-in-out infinite;
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: #2f2f36; border-radius: 5px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb {
+  background: var(--color-raised);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
 ::-webkit-scrollbar-track { background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+  /* A frozen mid-cycle frame would leave placeholders arbitrarily dimmed. */
+  .bc-skeleton { animation: none !important; opacity: 0.8; }
+}
