@@ -3,6 +3,8 @@ import { Code } from "astro:components";
 import Layout from "../layouts/Layout.astro";
 import Logo from "../components/Logo.astro";
 
+const CODE_THEME = "night-owl" as const;
+
 // The waterfall is drawn on a fixed character grid: BARS columns span the whole
 // 4.81s run, so pad/len below are just the same offsets the real UI uses.
 const BARS = 40;
@@ -30,15 +32,8 @@ const rows = raw.map((r) => ({
 const head = "kind".padEnd(10) + "span".padEnd(24) + "dur".padStart(6) + "  ";
 const axis = "0" + " ".repeat(BARS - 6) + "4.81s";
 
-const flow = `  your app                breadcrumb               your database
-  ┌──────────────┐        ┌──────────────┐        ┌──────────────┐
-  │ bc.trace()   │ ─────▶ │ normalize    │ ─────▶ │ spans        │
-  │ bc.telemetry │ spans  │ price        │  sql   │ in your PG   │
-  └──────────────┘        └──────────────┘        └──────┬───────┘
-                                                         │
-                          ┌──────────────┐               │
-                          │ /admin/trace │ ◀─────────────┘
-                          └──────────────┘  bc.handler`;
+const flow = `your app    ──▶  breadcrumb  ──▶  your database     ──▶  your dashboard
+bc.trace()       normalize        breadcrumb_spans       bc.handler`;
 
 const surface = `bc
 ├─ handler        dashboard + JSON API, mounted at basePath
@@ -79,22 +74,24 @@ export const bc = breadcrumb({
   basePath: "/admin/traces",
 });`;
 
-const surfaces = `  ┌─ spans ───────────────────────────────────────────────────┐
-  │  id · parent · kind · name · ms · tokens · cost · io       │
-  └─────────┬──────────────────┬──────────────────┬────────────┘
-            │                  │                  │
-      bc.handler        React hooks         bc.api
-      the dashboard     + headless kit      typed queries
-      that ships        in your layout      on the server`;
+// A panel nobody ships for you: your queue, your verdict, your buttons.
+const panel = `┌ review queue ──────────────┬ trace 8f21c4 ─────────────────┐
+│ ● refund #4192    $0.004   │ user   where is my order?     │
+│ ○ refund #4193    $0.002   │ tool   lookup-order   240ms   │
+│ ○ signup  #877    $0.001   │ model  gpt-5          1.64s   │
+│                            │ reply  it shipped friday      │
+│ 3 flagged today            │ [ approve ]      [ reject ]   │
+└────────────────────────────┴───────────────────────────────┘`;
 
-// Real columns from breadcrumb_spans. start_time is epoch ms, cost is a real.
-const join = `select u.plan,
-       count(*) filter (where s.status = 'error') as failures,
-       sum(s.cost) as spend
-from breadcrumb_spans s
-join users u on u.id = s.user_id
-where s.start_time > extract(epoch from now() - interval '7 days') * 1000
-group by u.plan;`;
+const legend = "█ self time    ─ waiting on children    ✕ failed";
+
+// Real columns from breadcrumb_spans: user_id, model, status ("ok" | "error"), cost.
+const analytics = `// after \`prisma db pull\`, the table is a model like any other
+const spend = await prisma.breadcrumb_spans.groupBy({
+  by: ["model"],
+  where: { user_id: customer.id, status: "ok" },
+  _sum: { cost: true },
+});`;
 
 const custom = `import { useTrace } from "@breadcrumb-sh/react";
 import { flowRows } from "@breadcrumb-sh/core/kit";
@@ -105,6 +102,15 @@ function ReviewQueue({ traceId }: { traceId: string }) {
   // Your layout, your domain: the reply beside the docs it cited,
   // the reviewer's verdict, the retry that finally worked.
 }`;
+
+const aisdk = `const { text } = await streamText({
+  model: openai("gpt-5"),
+  prompt,
+  experimental_telemetry: bc.telemetry({
+    functionId: "generate-answer",
+    metadata: { userId, sessionId },
+  }),
+});`;
 
 const usage = `await bc.trace("support-reply", async (t) => {
   const docs   = await loadContext(question);
@@ -128,6 +134,12 @@ const usage = `await bc.trace("support-reply", async (t) => {
 					rel="noreferrer"
 					class="hover:text-fg transition-colors">github</a
 				>
+				<a
+					href="https://x.com/joshuaKnauber"
+					target="_blank"
+					rel="noreferrer"
+					class="hover:text-fg transition-colors">x</a
+				>
 			</nav>
 		</header>
 
@@ -150,21 +162,26 @@ const usage = `await bc.trace("support-reply", async (t) => {
 			</div>
 			<span id="prompt-text" hidden>{setupPrompt}</span>
 
-			<h2>One instance, pointed at your database</h2>
-			<Code lang="ts" code={instance} theme="vitesse-dark" />
+			<h2>Setup</h2>
+			<Code lang="ts" code={instance} theme={CODE_THEME} />
 			<p class="note">
 				Tables are prefixed and additive, and the CLI generates the migration files you commit. If
 				you have used Better Auth, the shape is familiar.
 			</p>
 			<div class="ascii tree">{surface}</div>
 
-			<h2>Wrap a request once</h2>
-			<Code lang="ts" code={usage} theme="vitesse-dark" />
+			<h2>Instrumenting a request</h2>
 			<p>
-				Four calls in, seven spans out. The three you did not write are inside
-				<code>generate()</code>: instrument the boundary, and the model calls underneath record
-				themselves.
+				Model calls instrument themselves. Pass <code>bc.telemetry()</code> where the Vercel AI SDK
+				takes <code>experimental_telemetry</code> and the model, provider, token counts, cost and
+				payloads are read from the attributes the SDK already emits.
 			</p>
+			<Code lang="ts" code={aisdk} theme={CODE_THEME} />
+			<p>
+				Wrap the work around them in <code>bc.trace()</code> to get the retrieval, the tool calls and
+				the database write on the same timeline.
+			</p>
+			<Code lang="ts" code={usage} theme={CODE_THEME} />
 
 			<div class="ascii wf">
 				<div class="arow head">{head}<span class="ax">{axis}</span></div>
@@ -180,53 +197,41 @@ const usage = `await bc.trace("support-reply", async (t) => {
 						</div>
 					))
 				}
+				<div class="arow legend">{legend}</div>
 			</div>
-			<p class="note">
-				Solid is self time, thin is time spent waiting on children, so a step that only orchestrated
-				stops looking expensive. Colour is only ever a measurement: red means a step failed, ember
-				means it took more than a third of the run. Here that is 3.4 seconds sitting in two model
-				calls, and a deadlock on the way out.
-			</p>
 
-			<h2>The traces are rows in your database</h2>
+			<h2>Storage and querying</h2>
 			<div class="ascii">{flow}</div>
 			<p>
-				Not an export, not a webhook, not a read-only API over someone else's schema. One table,
-				<code>breadcrumb_spans</code>, in the database your app already writes to. Which means the
-				questions a hosted tool cannot answer are a join away:
+				Spans land in one table, <code>breadcrumb_spans</code>, in the database your app already
+				writes to. Not an export, not a webhook, not a read-only API over someone else's schema, so
+				your own analytics are ordinary queries with the ORM you already use.
 			</p>
-			<Code lang="sql" code={join} theme="vitesse-dark" />
+			<Code lang="ts" code={analytics} theme={CODE_THEME} />
 			<p>
-				Spend per plan. Failures per tenant. Whether the accounts that churned were the ones hitting
-				the slow path. Your spans know what ran and your own tables know who it ran for, and putting
-				them in one database is what turns one into the other.
+				Cost per customer on their billing page. Failures per tenant. Whether the accounts that
+				churned were the ones hitting the slow path. Those need the traces and your users table in
+				the same query, which is the one thing a hosted tool can never do.
 			</p>
 			<p class="note">
 				Retention is a window you set per environment, swept as traces arrive. Nothing is metered per
 				event, so you never have to sample or drop payloads to keep a bill down.
 			</p>
 
-			<h2>The dashboard is a starting point, not a ceiling</h2>
+			<h2>Build a custom UI for your tracing</h2>
 			<p>
-				A support agent, a coding agent and an eval loop all want to read a trace differently. One
-				wants the conversation, one wants the diff, one wants the tool calls beside the documents
-				they retrieved. A hosted dashboard has to stay generic, because it serves everyone's app.
-				Yours only has to serve yours.
+				A hosted dashboard has to stay generic, because it serves everyone's app. Yours only has to
+				serve yours:
 			</p>
-			<div class="ascii">{surfaces}</div>
+			<div class="ascii">{panel}</div>
 			<p>
-				So mount the built-in dashboard on day one and ship. When it stops fitting, the same data is
-				there as typed queries on the server, a client in the browser, and React hooks, with a
-				headless kit for the parts nobody should rewrite: span tree assembly, self time, hotspots,
-				chat-shaped payload parsing, cost formatting.
+				Mount the built-in dashboard on day one. When it stops fitting, the same data is there as
+				React hooks and typed queries, with a headless kit for span tree assembly, self time and
+				payload parsing.
 			</p>
-			<Code lang="tsx" code={custom} theme="vitesse-dark" />
-			<p>
-				That is the whole argument. Tracing is too close to your product to live behind someone
-				else's API, and too specific to your product to read through someone else's UI.
-			</p>
+			<Code lang="tsx" code={custom} theme={CODE_THEME} />
 
-			<h2>Start here</h2>
+			<h2>Documentation</h2>
 			<ul>
 				<li><a href="/docs/quickstart/">Quickstart</a>: install, mount, capture a first trace.</li>
 				<li><a href="/docs/frameworks/">Frameworks</a>: Next.js, Hono, or plain Node.</li>
@@ -238,9 +243,12 @@ const usage = `await bc.trace("support-reply", async (t) => {
 
 			<footer>
 				<span>MIT licensed.</span>
-				<a href="https://github.com/joshuaKnauber/breadcrumb" target="_blank" rel="noreferrer">
-					github.com/joshuaKnauber/breadcrumb
-				</a>
+				<span class="flex gap-5">
+					<a href="https://github.com/joshuaKnauber/breadcrumb" target="_blank" rel="noreferrer">
+						github
+					</a>
+					<a href="https://x.com/joshuaKnauber" target="_blank" rel="noreferrer">@joshuaKnauber</a>
+				</span>
 			</footer>
 		</article>
 	</div>
@@ -361,7 +369,6 @@ const usage = `await bc.trace("support-reply", async (t) => {
 		}
 	}
 	.actions a {
-		font-size: 14px;
 		color: var(--color-muted);
 		text-decoration: none;
 	}
@@ -389,6 +396,9 @@ const usage = `await bc.trace("support-reply", async (t) => {
 	.arow.head {
 		color: var(--color-faint);
 		padding-bottom: 6px;
+	}
+	.arow.legend {
+		padding-top: 10px;
 	}
 	.arow .k {
 		color: var(--color-faint);
@@ -424,7 +434,8 @@ const usage = `await bc.trace("support-reply", async (t) => {
 		margin-top: 64px;
 		padding: 18px 0 60px;
 		border-top: 1px solid var(--color-line);
-		font-size: 13px;
+		font-family: var(--font-mono);
+		font-size: 12.5px;
 		color: var(--color-faint);
 	}
 	footer a {

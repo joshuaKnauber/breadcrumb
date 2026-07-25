@@ -11,7 +11,7 @@ export default defineConfig({
   integrations: [mdx(), sitemap()],
   markdown: {
     remarkPlugins: [remarkAlert],
-    shikiConfig: { theme: "vitesse-dark" },
+    shikiConfig: { theme: "night-owl" },
   },
   vite: {
     plugins: [tailwindcss()],

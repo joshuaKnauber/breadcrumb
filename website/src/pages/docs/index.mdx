@@ -1,23 +1,29 @@
 ---
 layout: ../../layouts/DocsLayout.astro
 title: Introduction
-description: Breadcrumb is embeddable LLM tracing for TypeScript apps — your database, your deployment, your UI.
+description: Breadcrumb is LLM tracing you install as a library. Your database, your deployment, your UI.
 ---
 
 # Introduction
 
-Breadcrumb is embeddable LLM tracing for TypeScript apps. Instead of sending
-your prompts and traces to a third-party platform, you mount Breadcrumb inside
-your own backend: it writes traces to your database, runs its own migrations,
-and serves a dashboard from your app.
+Breadcrumb is LLM tracing you install as a library, not a service you send your
+traces to. It runs in your backend, stores spans in a database you already own,
+and serves its dashboard from a route in your app.
 
-This page explains the mental model. The [Quickstart](/docs/quickstart/) gets you
-to a first trace in a few minutes.
+Three reasons to pick it over a hosted platform:
 
-## The mental model
+- **Your traces sit next to your data.** They are rows in your database, so
+  nothing leaves your infrastructure and your own queries can join them to your
+  users, tenants, and orders.
+- **The dashboard is a starting point.** It ships in the box, and when it stops
+  fitting the way your product works, the same data is there as
+  [React hooks and typed queries](/docs/react/).
+- **Nothing is metered.** No account, no ingest endpoint, no per-event bill, so
+  you can log the whole payload and keep it as long as you want.
 
-You create one instance and pass it your database. If you've used Better Auth,
-the shape is familiar.
+## How it works
+
+Create one instance, pointed at your database.
 
 ```ts
 import { breadcrumb } from "@breadcrumb-sh/core";
@@ -29,29 +35,15 @@ export const bc = breadcrumb({
 });
 ```
 
-The `bc` instance gives you four things:
-
-- `bc.handler` mounts at `basePath` and serves the dashboard plus a JSON API.
-- `bc.telemetry()` plugs into the Vercel AI SDK's `experimental_telemetry`.
-- `bc.trace()` traces anything else manually.
-- `bc.api` runs typed, server-side queries over your traces, for building your
-  own UI.
-
-## What you get
-
-- **Your database.** Traces are stored in your own Postgres, or SQLite in
-  development, through additive-only migrations. Nothing leaves your
-  infrastructure.
-- **Your UI.** Serve the built-in dashboard, or build your own with the typed
-  client, React hooks, and headless kit — the data is already in your database.
-- **Drop-in tracing.** Instrument the Vercel AI SDK with one line, accept
-  OpenTelemetry over HTTP, or trace manually.
-- **Cost and tokens.** Per-call cost from your own price table, including
-  cache-read, cache-write, and reasoning tokens.
+Mount `bc.handler` at that path, behind your own auth, and the dashboard is
+live. Pass `bc.telemetry()` to the Vercel AI SDK and your model calls start
+recording themselves. Everything else is optional: `bc.trace()` for code the SDK
+does not cover, and `bc.api` for querying traces yourself.
 
 ## Next steps
 
 - [Quickstart](/docs/quickstart/): install, mount, and capture a trace.
 - [Frameworks](/docs/frameworks/): mount the handler in Next.js, Hono, or Node.
-- [Local development](/docs/local-development/) and
-  [Production](/docs/production/): how the setup differs between the two.
+- [Instrumenting](/docs/instrumenting/): the AI SDK, OpenTelemetry, or manual spans.
+- [Database](/docs/database/): adapters, schema, and migrations.
+- [Production](/docs/production/): auth, retention, and going live.

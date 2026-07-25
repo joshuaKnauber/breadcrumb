@@ -60,8 +60,8 @@ html {
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 1rem 1.25rem;
-  font-size: 0.82rem;
-  line-height: 1.65;
+  font-size: 12.5px;
+  line-height: 1.7;
   overflow-x: auto;
   font-family: var(--font-mono);
 }
@@ -117,7 +117,7 @@ html {
 /* Docs prose. Same scale as the homepage, which is written as a doc too. */
 .docs-content {
   color: var(--color-muted);
-  font-size: 15.5px;
+  font-size: 15px;
   line-height: 1.75;
 }
 .docs-content > :first-child {
@@ -214,7 +214,6 @@ html {
   width: 100%;
   border-collapse: collapse;
   margin: 1.5rem 0;
-  font-size: 0.875rem;
 }
 .docs-content th,
 .docs-content td {
@@ -259,11 +258,12 @@ html {
   align-items: center;
   gap: 0.4rem;
   color: var(--alert, var(--color-fg-muted));
-  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  font-size: 11px;
   font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.35rem;
+  letter-spacing: 0.15em;
+  margin-bottom: 0.4rem;
 }
 .docs-content .markdown-alert-title svg {
   width: 1em;
