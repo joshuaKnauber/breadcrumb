@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import type { DatabaseAdapter, ListOptions, SchemaState, TraceFilter } from "../db/types.js";
-import { META_TABLE, SPANS_TABLE, spanColumns } from "../db/schema.js";
+import { MCP_KEYS_TABLE, META_TABLE, SPANS_TABLE, spanColumns } from "../db/schema.js";
 import { planMigration } from "../db/ddl.js";
 import {
   clampLimit,
@@ -8,6 +8,8 @@ import {
   costByFunctionSelect,
   keysetSql,
   type Placeholder,
+  type McpKeyRow,
+  rowToMcpKey,
   rowToRunSummary,
   rowToSessionSummary,
   rowToSpan,
@@ -58,21 +60,73 @@ export function postgres(connectionOrClient: string | PgQueryable): DatabaseAdap
       `SELECT column_name FROM information_schema.columns WHERE table_name = $1`,
       [SPANS_TABLE]
     );
-    const indexes = await db.query(`SELECT indexname FROM pg_indexes WHERE tablename = $1`, [SPANS_TABLE]);
+    const indexes = await db.query(`SELECT indexname FROM pg_indexes WHERE tablename = ANY($1)`, [
+      [SPANS_TABLE, MCP_KEYS_TABLE],
+    ]);
     const meta = await db.query(`SELECT 1 FROM information_schema.tables WHERE table_name = $1`, [META_TABLE]);
+    const mcpKeys = await db.query(`SELECT 1 FROM information_schema.tables WHERE table_name = $1`, [
+      MCP_KEYS_TABLE,
+    ]);
     return {
       spansExists: columns.rows.length > 0,
       spansColumns: new Set(columns.rows.map((r) => r.column_name as string)),
       indexNames: new Set(indexes.rows.map((r) => r.indexname as string)),
       metaExists: meta.rows.length > 0,
+      mcpKeysExists: mcpKeys.rows.length > 0,
     };
   }
 
   return {
     id: "postgres",
 
+    client() {
+      return db;
+    },
+
     async inspectSchema() {
       return inspect();
+    },
+
+    async listMcpKeys() {
+      const { rows } = await db.query(
+        `SELECT id, name, key_prefix, created_at, last_used_at
+         FROM ${MCP_KEYS_TABLE} ORDER BY created_at DESC`
+      );
+      return (rows as unknown as McpKeyRow[]).map(rowToMcpKey);
+    },
+
+    async insertMcpKey(record) {
+      await db.query(
+        `INSERT INTO ${MCP_KEYS_TABLE} (id, name, key_hash, key_prefix, created_at, last_used_at)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          record.id,
+          record.name,
+          record.keyHash,
+          record.keyPrefix,
+          record.createdAt,
+          record.lastUsedAt,
+        ]
+      );
+    },
+
+    async findMcpKeyByHash(keyHash) {
+      const { rows } = await db.query(
+        `SELECT id, name, key_prefix, created_at, last_used_at
+         FROM ${MCP_KEYS_TABLE} WHERE key_hash = $1`,
+        [keyHash]
+      );
+      const row = (rows as unknown as McpKeyRow[])[0];
+      return row ? rowToMcpKey(row) : null;
+    },
+
+    async deleteMcpKey(id) {
+      const { rows } = await db.query(`DELETE FROM ${MCP_KEYS_TABLE} WHERE id = $1 RETURNING id`, [id]);
+      return rows.length > 0;
+    },
+
+    async touchMcpKey(id, at) {
+      await db.query(`UPDATE ${MCP_KEYS_TABLE} SET last_used_at = $1 WHERE id = $2`, [at, id]);
     },
 
     async migrate() {

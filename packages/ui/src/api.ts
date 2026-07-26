@@ -10,6 +10,9 @@ export const api = {
   trace: (traceId: string) => client.getTrace(traceId),
   cost: (days: number, environment?: string) => client.cost({ days, environment }),
   environments: () => client.listEnvironments(),
+  mcpKeys: () => client.listMcpKeys(),
+  createMcpKey: (name: string) => client.createMcpKey(name),
+  revokeMcpKey: (id: string) => client.revokeMcpKey(id),
 };
 
 // Re-exported so components keep importing formatters from "./api.js".

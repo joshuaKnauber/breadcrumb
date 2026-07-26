@@ -6,6 +6,7 @@
 import type {
   CostSummary,
   ListOptions,
+  McpKeyRecord,
   Page,
   RunSummary,
   SessionSummary,
@@ -22,6 +23,7 @@ export type {
   CostDatum,
   CostGroup,
   ListOptions,
+  McpKeyRecord,
   Page,
   RunSummary,
   SessionSummary,
@@ -55,6 +57,11 @@ export interface BreadcrumbClient {
   listEnvironments(): Promise<string[]>;
   cost(options?: { days?: number; environment?: string }): Promise<CostSummary>;
   stats(options?: TraceFilter): Promise<Stats>;
+  /** Keys plus the name the server identifies as, for the connect snippets. */
+  listMcpKeys(): Promise<{ keys: McpKeyRecord[]; serverName: string }>;
+  /** The `token` is returned only here and is unrecoverable afterwards. */
+  createMcpKey(name: string): Promise<{ key: McpKeyRecord; token: string }>;
+  revokeMcpKey(id: string): Promise<void>;
 }
 
 function joinUrl(basePath: string, path: string): string {
@@ -88,6 +95,19 @@ export function createBreadcrumbClient(options: BreadcrumbClientOptions = {}): B
     return (await res.json()) as T;
   }
 
+  async function send<T>(path: string, method: string, body?: unknown): Promise<T> {
+    const res = await doFetch(joinUrl(basePath, path), {
+      method,
+      headers: {
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
+        ...headers,
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`breadcrumb: ${path} → ${res.status}`);
+    return (await res.json()) as T;
+  }
+
   return {
     listTraces: (opts) => get<Page<TraceSummary>>(`api/traces${listQuery(opts)}`),
     listSessions: (opts) => get<Page<SessionSummary>>(`api/sessions${listQuery(opts)}`),
@@ -106,5 +126,11 @@ export function createBreadcrumbClient(options: BreadcrumbClientOptions = {}): B
       return get<CostSummary>(`api/cost${q ? `?${q}` : ""}`);
     },
     stats: (opts) => get<Stats>(`api/stats${listQuery(opts)}`),
+    listMcpKeys: () => get<{ keys: McpKeyRecord[]; serverName: string }>("api/mcp-keys"),
+    createMcpKey: (name) =>
+      send<{ key: McpKeyRecord; token: string }>("api/mcp-keys", "POST", { name }),
+    revokeMcpKey: async (id) => {
+      await send<{ revoked: true }>(`api/mcp-keys/${encodeURIComponent(id)}`, "DELETE");
+    },
   };
 }

@@ -26,7 +26,7 @@ describe("postgres adapter (via pglite)", () => {
   it("migrates, inserts, and aggregates", async () => {
     const adapter = makeAdapter();
     const first = await adapter.migrate();
-    expect(first.createdTables).toEqual(["breadcrumb_spans", "breadcrumb_meta"]);
+    expect(first.createdTables).toEqual(["breadcrumb_spans", "breadcrumb_meta", "breadcrumb_mcp_keys"]);
     const second = await adapter.migrate();
     expect(second).toEqual({ createdTables: [], addedColumns: [] });
 

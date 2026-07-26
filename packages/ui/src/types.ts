@@ -66,6 +66,14 @@ export interface CostSummary {
   byFunction: CostGroup[];
 }
 
+export interface McpKeyRecord {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  createdAt: number;
+  lastUsedAt: number | null;
+}
+
 export interface SpanRecord {
   id: string;
   traceId: string;

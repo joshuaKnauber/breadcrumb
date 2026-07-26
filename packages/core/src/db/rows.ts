@@ -2,6 +2,7 @@ import type {
   CostDatum,
   CostGroup,
   CostSummary,
+  McpKeyRecord,
   Page,
   RunSummary,
   SessionSummary,
@@ -425,4 +426,25 @@ export function traceSummarySelect(table: string, whereSql: string, havingSql: s
   GROUP BY trace_id
   ${havingSql ? `HAVING ${havingSql}` : ""}
   ORDER BY MIN(start_time) DESC, trace_id DESC`;
+}
+
+/** Raw MCP key row, as both dialects return it. */
+export interface McpKeyRow {
+  id: string;
+  name: string;
+  key_prefix: string;
+  created_at: number | string;
+  last_used_at: number | string | null;
+}
+
+export function rowToMcpKey(row: McpKeyRow): McpKeyRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    keyPrefix: row.key_prefix,
+    // Postgres returns BIGINT as a string to avoid precision loss; SQLite gives
+    // a number. Both are epoch ms, so normalize on the way out.
+    createdAt: Number(row.created_at),
+    lastUsedAt: row.last_used_at === null ? null : Number(row.last_used_at),
+  };
 }

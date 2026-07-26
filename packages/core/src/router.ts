@@ -3,6 +3,8 @@ import { clampLimit, pageOf } from "./db/rows.js";
 import { normalizeSpanData } from "./otel/normalize.js";
 import { parseOtlpJson } from "./otel/otlp.js";
 import { renderApp } from "./ui.js";
+import { readBearerToken, type McpKeyStore } from "./mcp/keys.js";
+import { resolveMcpServerName, type McpOptions } from "./mcp/config.js";
 
 export type AuthorizeFn = (
   request: Request
@@ -18,6 +20,11 @@ export interface RouterContext {
   ready: () => Promise<void>;
   /** Single write funnel (applies pricing, sweeps). Used by all ingest routes. */
   ingest: (spans: SpanRecord[]) => Promise<void>;
+  /** MCP key storage, backing both the agent endpoint and the dashboard tab. */
+  mcpKeys: McpKeyStore;
+  mcp: McpOptions;
+  /** Lazily built so valv is only loaded when an agent actually connects. */
+  mcpHandler: () => Promise<(request: Request) => Promise<Response>>;
 }
 
 const INGEST_KEY_HEADER = "x-breadcrumb-key";
@@ -146,12 +153,63 @@ export function createHandler(ctx: RouterContext): (request: Request) => Promise
       return json({ error: "not found" }, 404);
     }
 
+    // --- MCP: bearer-key auth, like ingest, so a coding agent reaches it
+    //     without going through the dashboard's browser-session `authorize` ---
+    if (path === "/api/mcp") {
+      const token = readBearerToken(request);
+      if (!token) {
+        // Advertise the scheme so a client knows what to present rather than
+        // guessing it hit the wrong endpoint.
+        return new Response(JSON.stringify({ error: "unauthorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json", "www-authenticate": "Bearer" },
+        });
+      }
+      const key = await ctx.mcpKeys.resolve(token);
+      if (!key) return json({ error: "unauthorized" }, 401);
+      const handle = await ctx.mcpHandler();
+      return handle(request);
+    }
+
     // --- UI/query routes: wrapped by the user's middleware and/or `authorize` ---
     if (ctx.authorize) {
       const verdict = await ctx.authorize(request);
       if (verdict instanceof Response) return verdict;
       if (verdict !== true) return json({ error: "unauthorized" }, 401);
     }
+    // MCP key management. Guarded by `authorize` above, so whoever can already
+    // read traces in the dashboard can mint a key that reads the same data.
+    if (path === "/api/mcp-keys") {
+      if (method === "GET") {
+        // serverName rides along so the dashboard's connect snippets name the
+        // server exactly as it identifies itself, including the loopback default.
+        return json({
+          keys: await ctx.mcpKeys.list(),
+          serverName: resolveMcpServerName(ctx.mcp, request),
+        });
+      }
+      if (method === "POST") {
+        let body: any;
+        try {
+          body = await request.json();
+        } catch {
+          return json({ error: "invalid json" }, 400);
+        }
+        const name = typeof body?.name === "string" ? body.name.trim() : "";
+        if (!name) return json({ error: "expected { name: string }" }, 400);
+        if (name.length > 255) return json({ error: "name too long" }, 400);
+        const { record, token } = await ctx.mcpKeys.create(name);
+        // The only time the raw token is ever returned — it is stored hashed.
+        return json({ key: record, token }, 201);
+      }
+    }
+    const keyMatch = path.match(/^\/api\/mcp-keys\/([^/]+)$/);
+    if (keyMatch && method === "DELETE") {
+      const revoked = await ctx.mcpKeys.revoke(decodeURIComponent(keyMatch[1]!));
+      if (!revoked) return json({ error: "not found" }, 404);
+      return json({ revoked: true });
+    }
+
     if (method === "GET") {
       if (path === "/api/traces") {
         await ctx.ready();

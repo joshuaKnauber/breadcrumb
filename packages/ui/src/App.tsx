@@ -1,6 +1,7 @@
 import { Route, Routes } from "react-router-dom";
 import { SessionsView, SessionDetail } from "./SessionsView.js";
 import { CostView } from "./CostView.js";
+import { McpView } from "./McpView.js";
 import { TraceView } from "./TraceView.js";
 import { Sidebar } from "./Sidebar.js";
 
@@ -14,6 +15,7 @@ export function App() {
           <Route path="/sessions/:sessionKey" element={<SessionDetail />} />
           <Route path="/sessions/:sessionKey/traces/:traceId" element={<TraceView />} />
           <Route path="/cost" element={<CostView />} />
+          <Route path="/mcp" element={<McpView />} />
         </Routes>
       </main>
     </div>

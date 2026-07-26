@@ -153,6 +153,11 @@ const server = createServer(async (req, res) => {
   <button onclick="run('/run-error')">run failing pipeline</button>
   <a href="${BASE_PATH}">open traces →</a>
 </p>
+<p style="font-size:14px;color:#555">
+  Run the failing pipeline a few times, then
+  <a href="${BASE_PATH}/mcp">create an MCP key</a>
+  and point your coding agent at these traces to debug them.
+</p>
 <pre id="out"></pre>
 <script>
 async function run(path) {

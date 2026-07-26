@@ -22,6 +22,8 @@ import { applyPricing, resolvePricing, type Pricing } from "./pricing.js";
 import { createSweeper, type RetentionOptions } from "./retention.js";
 import { createHandler, type AuthorizeFn } from "./router.js";
 import { createTraceFn, type TraceFn } from "./trace.js";
+import { createMcpKeyStore } from "./mcp/keys.js";
+import type { McpOptions } from "./mcp/config.js";
 
 export interface BreadcrumbOptions {
   /** Database adapter, e.g. sqlite(".breadcrumb/dev.db") from @breadcrumb-sh/core/adapters */
@@ -77,6 +79,14 @@ export interface BreadcrumbOptions {
    * with `breadcrumb migrate` or `breadcrumb generate` plus your tooling.
    */
   migrations?: "auto" | "manual";
+  /**
+   * Tunes the MCP endpoint at `basePath + /api/mcp`, where a coding agent reads
+   * your traces. Not a switch: the endpoint is always mounted, but it is
+   * unreachable until someone mints a key from the dashboard's MCP tab, which
+   * `authorize` already guards. The agent gets policy-gated read access to the
+   * span table only — no other table in your database, and no writes.
+   */
+  mcp?: McpOptions;
 }
 
 export interface Breadcrumb {
@@ -194,6 +204,19 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
   });
   const trace = createTraceFn(pipeline.tracer);
 
+  const mcpKeys = createMcpKeyStore(adapter, ready);
+  const mcpOptions = options.mcp ?? {};
+
+  // valv and the MCP SDK are only pulled in when an agent actually connects, so
+  // apps that never open the MCP tab don't pay for loading them.
+  let mcpHandlerPromise: Promise<(request: Request) => Promise<Response>> | null = null;
+  const mcpHandler = () =>
+    (mcpHandlerPromise ??= (async () => {
+      const { createTraceValv, createMcpHandler } = await import("./mcp/server.js");
+      await ready();
+      return createMcpHandler(await createTraceValv(adapter, mcpOptions), mcpOptions);
+    })());
+
   const handler = createHandler({
     basePath,
     environment,
@@ -202,6 +225,9 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
     adapter,
     ready,
     ingest: (spans) => api.ingestSpans({ spans }),
+    mcpKeys,
+    mcp: mcpOptions,
+    mcpHandler,
   });
 
   return {

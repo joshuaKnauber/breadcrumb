@@ -153,6 +153,7 @@ export interface SchemaState {
   spansColumns: Set<string>;
   indexNames: Set<string>;
   metaExists: boolean;
+  mcpKeysExists: boolean;
 }
 
 /** The DDL needed to bring a database to the current schema. */
@@ -207,8 +208,20 @@ export interface CostSummary {
   byFunction: CostGroup[];
 }
 
-export interface DatabaseAdapter {
+/**
+ * An MCP key as the dashboard sees it. Deliberately excludes `key_hash` — the
+ * only place that ever reads it is the resolver, via findMcpKeyByHash.
+ */
+export interface McpKeyRecord {
   id: string;
+  name: string;
+  keyPrefix: string;
+  createdAt: number;
+  lastUsedAt: number | null;
+}
+
+export interface DatabaseAdapter {
+  id: Dialect;
   /** Create/upgrade breadcrumb's tables. Additive-only; safe to call repeatedly. */
   migrate(): Promise<MigrationResult>;
   /** Read the live schema, so a migration can be planned without applying it. */
@@ -229,5 +242,21 @@ export interface DatabaseAdapter {
    * (no other instance swept within intervalMs). DB-backed, pool-safe.
    */
   claimSweep(now: number, intervalMs: number): Promise<boolean>;
+
+  // --- MCP keys: bearer tokens that let a coding agent read traces ---
+  listMcpKeys(): Promise<McpKeyRecord[]>;
+  insertMcpKey(record: McpKeyRecord & { keyHash: string }): Promise<void>;
+  findMcpKeyByHash(keyHash: string): Promise<McpKeyRecord | null>;
+  /** Returns false when no key had that id (already revoked, or never existed). */
+  deleteMcpKey(id: string): Promise<boolean>;
+  touchMcpKey(id: string, at: number): Promise<void>;
+
+  /**
+   * The underlying driver handle (better-sqlite3 Database, pg.Pool, ...), so
+   * features needing direct SQL can reach it. The MCP server hands this to valv,
+   * which compiles and runs the agent's queries under its own policy.
+   */
+  client(): unknown;
+
   close?(): Promise<void>;
 }

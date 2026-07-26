@@ -56,3 +56,27 @@ export const metaColumns: Record<string, ColumnSpec> = {
   key: { type: "text", primary: true },
   value: { type: "integer" },
 };
+
+/**
+ * Keys that let a coding agent read traces over MCP. Created from the dashboard
+ * (so whoever can already see traces can mint one) and presented as a bearer
+ * token. Only the SHA-256 hash is stored — the token itself is shown once at
+ * creation and is unrecoverable afterwards, so a database leak yields nothing
+ * replayable. `key_prefix` exists purely so the UI can tell two keys apart.
+ */
+export const MCP_KEYS_TABLE = "breadcrumb_mcp_keys";
+
+export const mcpKeyColumns: Record<string, ColumnSpec> = {
+  id: { type: "text", primary: true },
+  name: { type: "text" },
+  key_hash: { type: "text" },
+  key_prefix: { type: "text" },
+  created_at: { type: "integer" },
+  last_used_at: { type: "integer", nullable: true },
+};
+
+export const mcpKeyIndexes: { name: string; columns: string[]; unique?: boolean }[] = [
+  // Every MCP request resolves a key by hash, so this lookup must be indexed.
+  // Unique doubles as a guard against storing the same token twice.
+  { name: "breadcrumb_mcp_keys_hash", columns: ["key_hash"], unique: true },
+];

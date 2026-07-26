@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import type DatabaseType from "better-sqlite3";
 import type { DatabaseAdapter, ListOptions, SchemaState, TraceFilter } from "../db/types.js";
-import { META_TABLE, SPANS_TABLE, spanColumns } from "../db/schema.js";
+import { MCP_KEYS_TABLE, META_TABLE, SPANS_TABLE, spanColumns } from "../db/schema.js";
 import { planMigration } from "../db/ddl.js";
 import {
   clampLimit,
@@ -9,6 +9,8 @@ import {
   costByFunctionSelect,
   keysetSql,
   type Placeholder,
+  type McpKeyRow,
+  rowToMcpKey,
   rowToRunSummary,
   rowToSessionSummary,
   rowToSpan,
@@ -71,19 +73,66 @@ export function sqlite(fileOrDb: string | DatabaseType.Database): DatabaseAdapte
       indexNames: new Set(
         (
           db
-            .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = ?")
-            .all(SPANS_TABLE) as { name: string }[]
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name IN (?, ?)")
+            .all(SPANS_TABLE, MCP_KEYS_TABLE) as { name: string }[]
         ).map((r) => r.name)
       ),
       metaExists: tableExists(META_TABLE),
+      mcpKeysExists: tableExists(MCP_KEYS_TABLE),
     };
   }
 
   return {
     id: "sqlite",
 
+    client() {
+      return db;
+    },
+
     async inspectSchema() {
       return inspect();
+    },
+
+    async listMcpKeys() {
+      const rows = db
+        .prepare(
+          `SELECT id, name, key_prefix, created_at, last_used_at
+           FROM ${MCP_KEYS_TABLE} ORDER BY created_at DESC`
+        )
+        .all() as McpKeyRow[];
+      return rows.map(rowToMcpKey);
+    },
+
+    async insertMcpKey(record) {
+      db.prepare(
+        `INSERT INTO ${MCP_KEYS_TABLE} (id, name, key_hash, key_prefix, created_at, last_used_at)
+         VALUES (@id, @name, @key_hash, @key_prefix, @created_at, @last_used_at)`
+      ).run({
+        id: record.id,
+        name: record.name,
+        key_hash: record.keyHash,
+        key_prefix: record.keyPrefix,
+        created_at: record.createdAt,
+        last_used_at: record.lastUsedAt,
+      });
+    },
+
+    async findMcpKeyByHash(keyHash) {
+      const row = db
+        .prepare(
+          `SELECT id, name, key_prefix, created_at, last_used_at
+           FROM ${MCP_KEYS_TABLE} WHERE key_hash = ?`
+        )
+        .get(keyHash) as McpKeyRow | undefined;
+      return row ? rowToMcpKey(row) : null;
+    },
+
+    async deleteMcpKey(id) {
+      return db.prepare(`DELETE FROM ${MCP_KEYS_TABLE} WHERE id = ?`).run(id).changes > 0;
+    },
+
+    async touchMcpKey(id, at) {
+      db.prepare(`UPDATE ${MCP_KEYS_TABLE} SET last_used_at = ? WHERE id = ?`).run(at, id);
     },
 
     async migrate() {

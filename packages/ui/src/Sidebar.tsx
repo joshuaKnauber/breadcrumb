@@ -1,7 +1,15 @@
 import { useSyncExternalStore } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { Tooltip } from "@base-ui/react/tooltip";
-import { CurrencyDollar, Desktop, Moon, SidebarSimple, Stack, Sun } from "@phosphor-icons/react";
+import {
+  CurrencyDollar,
+  Desktop,
+  Moon,
+  PlugsConnected,
+  SidebarSimple,
+  Stack,
+  Sun,
+} from "@phosphor-icons/react";
 import { Logo } from "./ui/Logo.js";
 import { ToggleGroup } from "./ui/ToggleGroup.js";
 import { useTheme, type Theme } from "./theme.js";
@@ -36,6 +44,12 @@ const TABS = [
     label: "Cost",
     icon: <CurrencyDollar size={ICON} />,
     match: (p: string) => p.startsWith("/cost"),
+  },
+  {
+    to: "/mcp",
+    label: "MCP",
+    icon: <PlugsConnected size={ICON} />,
+    match: (p: string) => p.startsWith("/mcp"),
   },
 ];
 

@@ -141,5 +141,6 @@ async function dev(args: string[]) {
     console.log(`▸ breadcrumb dev server → http://localhost:${port}`);
     console.log(`▸ ingest (key: "dev")   → http://localhost:${port}/api/ingest/spans`);
     console.log(`▸ storage               → ${dbPath}`);
+    console.log(`▸ mcp for your agent    → http://localhost:${port}/mcp (create a key there)`);
   });
 }

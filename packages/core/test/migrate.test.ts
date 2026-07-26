@@ -8,7 +8,7 @@ import { planMigration, renderMigrationSql, EMPTY_SCHEMA_STATE } from "../src/db
 describe("planMigration", () => {
   it("plans a full fresh schema for postgres", () => {
     const plan = planMigration("postgres", EMPTY_SCHEMA_STATE);
-    expect(plan.createdTables).toEqual(["breadcrumb_spans", "breadcrumb_meta"]);
+    expect(plan.createdTables).toEqual(["breadcrumb_spans", "breadcrumb_meta", "breadcrumb_mcp_keys"]);
     const sql = plan.statements.join("\n");
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS breadcrumb_spans");
     expect(sql).toContain("BIGINT"); // integer → BIGINT on pg

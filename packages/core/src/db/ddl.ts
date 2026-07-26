@@ -1,6 +1,9 @@
 import {
+  MCP_KEYS_TABLE,
   META_TABLE,
   SPANS_TABLE,
+  mcpKeyColumns,
+  mcpKeyIndexes,
   metaColumns,
   spanColumns,
   spanIndexes,
@@ -36,8 +39,12 @@ function addColumnSql(dialect: Dialect, table: string, name: string, spec: Colum
   return `ALTER TABLE ${table} ADD COLUMN ${guard}${name} ${TYPE_MAP[dialect][spec.type]}`;
 }
 
-function createIndexSql(table: string, idx: { name: string; columns: string[] }): string {
-  return `CREATE INDEX IF NOT EXISTS ${idx.name} ON ${table} (${idx.columns.join(", ")})`;
+function createIndexSql(
+  table: string,
+  idx: { name: string; columns: string[]; unique?: boolean }
+): string {
+  const unique = idx.unique ? "UNIQUE " : "";
+  return `CREATE ${unique}INDEX IF NOT EXISTS ${idx.name} ON ${table} (${idx.columns.join(", ")})`;
 }
 
 /**
@@ -70,6 +77,15 @@ export function planMigration(dialect: Dialect, state: SchemaState): MigrationPl
     createdTables.push(META_TABLE);
   }
 
+  if (!state.mcpKeysExists) {
+    statements.push(createTableSql(dialect, MCP_KEYS_TABLE, mcpKeyColumns));
+    createdTables.push(MCP_KEYS_TABLE);
+  }
+
+  for (const idx of mcpKeyIndexes) {
+    if (!state.indexNames.has(idx.name)) statements.push(createIndexSql(MCP_KEYS_TABLE, idx));
+  }
+
   return { statements, createdTables, addedColumns };
 }
 
@@ -79,6 +95,7 @@ export const EMPTY_SCHEMA_STATE: SchemaState = {
   spansColumns: new Set(),
   indexNames: new Set(),
   metaExists: false,
+  mcpKeysExists: false,
 };
 
 /** Render a plan as a reviewable `.sql` migration file. */
