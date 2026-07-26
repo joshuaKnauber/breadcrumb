@@ -31,3 +31,6 @@ npm-debug.log*
 # -wal sidecar on every run, so tracking these means anyone who runs the example
 # gets binary noise in git status.
 .breadcrumb/
+
+# Astro generated types and dev cache
+.astro/
