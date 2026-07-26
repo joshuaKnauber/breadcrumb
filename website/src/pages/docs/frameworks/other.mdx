@@ -11,7 +11,7 @@ Any framework that gives you a web `Request` works directly: call
 
 ## SvelteKit
 
-Add a catch-all endpoint at `src/routes/admin/traces/[...path]/+server.ts`:
+Add a catch-all endpoint at `src/routes/api/breadcrumb/[...path]/+server.ts`:
 
 ```ts
 import { bc } from "$lib/breadcrumb";
@@ -28,7 +28,7 @@ Bun's `serve` and Elysia both work with the web `Request` directly:
 Bun.serve({
   fetch(request) {
     const url = new URL(request.url);
-    if (url.pathname.startsWith("/admin/traces")) return bc.handler(request);
+    if (url.pathname.startsWith("/api/breadcrumb")) return bc.handler(request);
     // …the rest of your app
     return new Response("Not found", { status: 404 });
   },
@@ -43,7 +43,16 @@ the request to `bc.handler(request)`.
 If your framework isn't listed here, look for where it exposes the standard
 `Request` object — that's all Breadcrumb needs.
 
+## Viewing the traces
+
+Each snippet above mounts the API. The [dashboard](/docs/dashboard/) is a React
+component, so render it wherever your app renders React, pointed at
+`api="/api/breadcrumb"`. If there's no React in your stack, query the data
+directly with [`bc.api`](/docs/querying/) and render it yourself, optionally
+with the [headless kit](/docs/react/#headless-kit).
+
 ## Next steps
 
+- [Dashboard](/docs/dashboard/): mount the UI.
 - [Database & migrations](/docs/database/): choose an adapter.
 - [Instrumenting](/docs/instrumenting/): capture your first trace.

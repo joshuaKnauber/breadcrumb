@@ -20,7 +20,7 @@ breadcrumb({
 Point the exporter at `basePath/api/ingest/otel` and send the key as a header:
 
 ```bash
-OTEL_EXPORTER_OTLP_ENDPOINT=https://yourapp.com/admin/traces/api/ingest/otel \
+OTEL_EXPORTER_OTLP_ENDPOINT=https://yourapp.com/api/breadcrumb/api/ingest/otel \
 OTEL_EXPORTER_OTLP_HEADERS="x-breadcrumb-key=$BREADCRUMB_KEY"
 ```
 
@@ -30,7 +30,7 @@ There's also a plain JSON endpoint at `basePath/api/ingest/spans` for sending
 span records directly, without an OpenTelemetry SDK:
 
 ```bash
-curl -X POST https://yourapp.com/admin/traces/api/ingest/spans \
+curl -X POST https://yourapp.com/api/breadcrumb/api/ingest/spans \
   -H "x-breadcrumb-key: $BREADCRUMB_KEY" \
   -H "content-type: application/json" \
   -d '{ "spans": [{ "traceId": "abc", "name": "external-call", "kind": "llm" }] }'

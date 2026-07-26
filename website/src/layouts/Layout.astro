@@ -8,7 +8,7 @@ interface Props {
 
 const {
 	title = "Breadcrumb — LLM tracing you own, end to end",
-	description = "Breadcrumb is embeddable LLM tracing for TypeScript apps. It drops into your backend, stores traces in your own Postgres, and gives you a dashboard you serve from your app. Your database, your deployment, your UI.",
+	description = "Breadcrumb is embeddable LLM tracing for TypeScript apps. It drops into your backend, stores traces in your own Postgres, and gives you a dashboard you mount in your app. Your database, your deployment, your UI.",
 } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, Astro.site).href;
@@ -46,6 +46,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site).href;
 			type="text/css"
 			href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css"
 		/>
+		<script defer data-domain="breadcrumb.sh" src="https://nudge-events.up.railway.app/js/script.js"></script>
 	</head>
 	<body>
 		<slot />

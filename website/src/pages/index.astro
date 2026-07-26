@@ -33,17 +33,18 @@ const head = "kind".padEnd(10) + "span".padEnd(24) + "dur".padStart(6) + "  ";
 const axis = "0" + " ".repeat(BARS - 6) + "4.81s";
 
 const flow = `your app    ──▶  breadcrumb  ──▶  your database     ──▶  your dashboard
-bc.trace()       normalize        breadcrumb_spans       bc.handler`;
+bc.trace()       normalize        breadcrumb_spans       <Dashboard />`;
 
 // Stack-agnostic version of the quickstart prompt: the assistant works the
 // stack out of the codebase instead of us asking for it up front.
 const SITE = "https://breadcrumb.sh";
-const setupPrompt = `I'm adding Breadcrumb to my TypeScript app: embeddable LLM tracing that stores traces in a database I own and serves its dashboard from my own app.
+const setupPrompt = `I'm adding Breadcrumb to my TypeScript app: embeddable LLM tracing that stores traces in a database I own and renders its dashboard as a React component inside my own app.
 
 Docs:
 - Introduction: ${SITE}/docs/
 - Quickstart: ${SITE}/docs/quickstart/
 - Mounting the handler: ${SITE}/docs/frameworks/
+- Mounting the dashboard: ${SITE}/docs/dashboard/
 - Database & adapters: ${SITE}/docs/database/
 - Instrumenting: ${SITE}/docs/instrumenting/
 - Custom UI (client, React hooks, kit): ${SITE}/docs/react/
@@ -52,13 +53,16 @@ Docs:
 
 Read those, then set it up:
 1. Work out my stack from the codebase: framework, database, and how I call models.
-2. Install @breadcrumb-sh/core plus the driver for my database.
+2. Install @breadcrumb-sh/core and @breadcrumb-sh/react plus the driver for my database.
 3. Create one shared bc instance with the matching adapter and a basePath.
-4. Mount bc.handler at that path, behind an authorize check.
-5. Instrument my existing LLM calls and confirm a trace lands.
-6. Open the dashboard's MCP tab, create a key, and connect yourself to it, so you can query these traces directly when I ask you to debug something.
+4. Mount bc.handler at that path, behind an authorize check. That serves the JSON API, not a UI.
+5. Render <BreadcrumbDashboard /> on a page route I own, pointed at that basePath, and import "@breadcrumb-sh/react/styles.css" once above it. Guard that route with my app's existing auth.
+6. Instrument my existing LLM calls and confirm a trace lands.
+7. Open the dashboard's MCP tab, create a key, and connect yourself to it, so you can query these traces directly when I ask you to debug something.
 
 Good to know:
+- The API and the dashboard page are two separate routes. The handler serves no HTML.
+- The dashboard fills its container, so give it one with a height.
 - The schema is created automatically in development. For production, generate migration files with "npx breadcrumb generate", commit them, and set migrations: "manual".
 - On serverless, await bc.flush() before the response returns so no spans are lost.`;
 
@@ -67,7 +71,7 @@ import { postgres } from "@breadcrumb-sh/core/adapters";
 
 export const bc = breadcrumb({
   database: postgres(process.env.DATABASE_URL!),
-  basePath: "/admin/traces",
+  basePath: "/api/breadcrumb",
   mcp: { hidePayloads: true }, // your agent reads traces, not prompts
 });`;
 
@@ -90,15 +94,22 @@ const spend = await prisma.breadcrumb_spans.groupBy({
   _sum: { cost: true },
 });`;
 
-const custom = `import { useTrace } from "@breadcrumb-sh/react";
+const custom = `import { BreadcrumbDashboard, useSessions, useTrace } from "@breadcrumb-sh/react";
 import { flowRows } from "@breadcrumb-sh/core/kit";
 
-function ReviewQueue({ traceId }: { traceId: string }) {
-  const { data: spans = [] } = useTrace(traceId);
+function ReviewQueue() {
+  const [selected, setSelected] = useState<string | null>(null);
+  const { data: queue } = useSessions({ status: "error" });
+  const { data: spans = [] } = useTrace(selected);
   const rows = flowRows(spans);
   // Your layout, your domain: the reply beside the docs it cited,
   // the reviewer's verdict, the retry that finally worked.
-}`;
+}
+
+// Ships as a page in the dashboard, beside the ones that came in the box.
+<BreadcrumbDashboard
+  pages={[{ name: "review", label: "Review", element: <ReviewQueue /> }]}
+/>;`;
 
 const aisdk = `const { text } = await streamText({
   model: openai("gpt-5"),
@@ -144,7 +155,7 @@ const usage = `await bc.trace("support-reply", async (t) => {
 			<h1>Roll your own LLM tracing in minutes</h1>
 			<p class="lede">
 				LLM tracing for TypeScript apps that installs like a library, not a service. Traces land in
-				the database you already run, and the dashboard is a route in your own app.
+				the database you already run, and the dashboard is a component you mount in your own app.
 			</p>
 
 			<div class="actions">
@@ -227,11 +238,11 @@ const usage = `await bc.trace("support-reply", async (t) => {
 			<h2>Build a custom UI for your tracing</h2>
 			<p>
 				A hosted dashboard has to stay generic, because it serves everyone's app. Yours only has to
-				serve yours:
+				serve yours, and because the dashboard is a component, your panel ships as a page inside it:
 			</p>
 			<div class="ascii">{panel}</div>
 			<p>
-				Mount the built-in dashboard on day one. When it stops fitting, the same data is there as
+				Mount the built-in dashboard on day one, then add your own pages to it. When it stops fitting entirely, the same data is there as
 				React hooks and typed queries, with a headless kit for span tree assembly, self time and
 				payload parsing.
 			</p>
@@ -241,6 +252,7 @@ const usage = `await bc.trace("support-reply", async (t) => {
 			<ul>
 				<li><a href="/docs/quickstart/">Quickstart</a>: install, mount, capture a first trace.</li>
 				<li><a href="/docs/frameworks/">Frameworks</a>: Next.js, Hono, or plain Node.</li>
+				<li><a href="/docs/dashboard/">Dashboard</a>: mount the UI, add your own pages.</li>
 				<li><a href="/docs/instrumenting/ai-sdk/">Instrumenting</a>: the AI SDK, OpenTelemetry, manual spans.</li>
 				<li><a href="/docs/react/">React</a>: hooks and the headless kit for your own panel.</li>
 				<li><a href="/docs/querying/">Querying</a>: the typed API over your own traces.</li>

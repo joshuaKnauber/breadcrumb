@@ -32,6 +32,7 @@ export const docsNav: DocsGroup[] = [
 					{ label: "Other frameworks", href: "/docs/frameworks/other/" },
 				],
 			},
+			{ label: "Dashboard", href: "/docs/dashboard/" },
 			{ label: "Database & adapters", href: "/docs/database/" },
 			{ label: "Migrations", href: "/docs/migrations/" },
 			{ label: "Local development", href: "/docs/local-development/" },

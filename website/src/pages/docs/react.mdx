@@ -1,12 +1,15 @@
 ---
 layout: ../../layouts/DocsLayout.astro
 title: React & client
-description: The typed browser client, React hooks, and headless kit for a custom dashboard.
+description: The React hooks, typed browser client, and headless kit behind the dashboard.
 ---
 
 # React & client
 
-For a browser dashboard, Breadcrumb ships a typed client, React hooks, and a headless kit — the same contract as `bc.api`, over HTTP.
+The [dashboard](/docs/dashboard/) is built on three pieces that ship on their
+own: React hooks, a typed browser client, and a headless kit for rendering
+spans. Anything the dashboard shows, you can build, against the same contract as
+`bc.api`, over HTTP.
 
 ## React hooks
 
@@ -14,7 +17,10 @@ For a browser dashboard, Breadcrumb ships a typed client, React hooks, and a hea
 npm i @breadcrumb-sh/react
 ```
 
-Wrap your dashboard in a `BreadcrumbProvider` (inside a react-query `QueryClientProvider`), then read data with hooks:
+Inside `<BreadcrumbDashboard>` — including on your own
+[custom pages](/docs/dashboard/#adding-pages) — the hooks need no setup. To
+build a UI from scratch instead, wrap it in a `BreadcrumbProvider` inside a
+react-query `QueryClientProvider`:
 
 ```tsx
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -23,21 +29,37 @@ import { BreadcrumbProvider, useSessions, useStats } from "@breadcrumb-sh/react"
 function App() {
   return (
     <QueryClientProvider client={qc}>
-      <BreadcrumbProvider basePath="/admin/traces">
-        <Dashboard />
+      <BreadcrumbProvider basePath="/api/breadcrumb">
+        <Traces />
       </BreadcrumbProvider>
     </QueryClientProvider>
   );
 }
 
-function Dashboard() {
+function Traces() {
   const { data: stats } = useStats({ since: Date.now() - 7 * 864e5 });
   const { data } = useSessions({ environment: "production" });
   // …render it however your product looks.
 }
 ```
 
-Hooks: `useSessions`, `useTraces`, `useRuns`, `useTrace`, `useSpan`, `useCost`, `useStats`, `useEnvironments`. Each takes the same filters as `bc.api` and returns a react-query result.
+Each hook takes the same filters as `bc.api` plus an optional TanStack Query
+options object, and returns a `UseQueryResult`.
+
+| Hook | Returns |
+| --- | --- |
+| `useSessions(filter?)` | A page of session summaries. |
+| `useTraces(filter?)` | A page of trace summaries. |
+| `useRuns(sessionKey)` | The runs within a session. |
+| `useTrace(traceId)` | Every span in a trace. |
+| `useSpan(id)` | A single span. |
+| `useCost({ days?, environment? })` | The Cost view's data. |
+| `useStats(filter?)` | Runs, error rate, cost, tokens, latency. |
+| `useEnvironments()` | Known environment names. |
+| `useMcpKeys()` | MCP keys, plus the server name for connect snippets. |
+| `useCreateMcpKey()` / `useRevokeMcpKey()` | Mutations for the same. |
+
+`useBreadcrumbClient()` returns the underlying client for imperative calls.
 
 ## Typed client
 
@@ -46,22 +68,31 @@ Framework-agnostic — use it anywhere in the browser or in another service.
 ```ts
 import { createBreadcrumbClient } from "@breadcrumb-sh/core/client";
 
-const client = createBreadcrumbClient({ basePath: "/admin/traces" });
+const client = createBreadcrumbClient({ basePath: "/api/breadcrumb" });
 const { items } = await client.listSessions({ status: "error" });
 ```
 
+Pass a configured client to `<BreadcrumbDashboard client={…}>` when you need
+custom `fetch` behaviour or auth headers on every request.
+
 ## Headless kit
 
-The view logic — nobody should rebuild span-tree assembly. Import it and render your own components.
+The view logic — nobody should rebuild span-tree assembly. Import it and render
+your own components.
 
 ```ts
-import { flowRows, selfTime, hotspots, asMessages, fmtCost } from "@breadcrumb-sh/core/kit";
+import { traceModel, selfTime, hotspots, asMessages, fmtCost } from "@breadcrumb-sh/core/kit";
 
-const rows = flowRows(spans);         // denoised, depth-indexed rows
+const model = traceModel(spans);      // rows, scales, hotspots, totals
+model.rows;                           // denoised, depth-indexed, ready to map
 const { errorId, slowestId } = hotspots(spans);
 selfTime(span, children);             // extent minus what the children covered
 const chat = asMessages(span.input);  // detect + parse chat-shaped payloads
-fmtCost(0.0042);                       // "$0.0042"
+fmtCost(0.0042);                      // "$0.0042"
 ```
 
-Three levels, one contract underneath: server SDK (`bc.api`) → typed client → React hooks, with the kit for rendering. Pick whichever fits your app.
+`traceModel` is what the shipped waterfall renders from, so a UI you build from
+scratch reads exactly the same numbers rather than reimplementing them.
+
+Three levels, one contract underneath: server SDK (`bc.api`) → typed client →
+React hooks, with the kit for rendering. Pick whichever fits your app.

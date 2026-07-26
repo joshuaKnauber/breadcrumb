@@ -31,8 +31,8 @@ const groups = [
 	},
 ] as const;
 
-const installPostgres = "npm i @breadcrumb-sh/core pg";
-const installSqlite = "npm i @breadcrumb-sh/core better-sqlite3";
+const installPostgres = "npm i @breadcrumb-sh/core @breadcrumb-sh/react pg";
+const installSqlite = "npm i @breadcrumb-sh/core @breadcrumb-sh/react better-sqlite3";
 
 const instancePostgres = `// lib/breadcrumb.ts
 import { breadcrumb } from "@breadcrumb-sh/core";
@@ -40,7 +40,7 @@ import { postgres } from "@breadcrumb-sh/core/adapters";
 
 export const bc = breadcrumb({
   database: postgres(process.env.DATABASE_URL!),
-  basePath: "/admin/traces",
+  basePath: "/api/breadcrumb",
   authorize: (req) => isAdmin(req),
 });`;
 
@@ -50,34 +50,56 @@ import { sqlite } from "@breadcrumb-sh/core/adapters";
 
 export const bc = breadcrumb({
   database: sqlite(".breadcrumb/dev.db"),
-  basePath: "/admin/traces",
+  basePath: "/api/breadcrumb",
 });`;
 
-const mountNext = `// app/admin/traces/[[...breadcrumb]]/route.ts
+const mountNext = `// app/api/breadcrumb/[...path]/route.ts
 import { toNextHandler } from "@breadcrumb-sh/core/next";
 import { bc } from "@/lib/breadcrumb";
 
-export const { GET, POST } = toNextHandler(bc);`;
+export const { GET, POST, DELETE } = toNextHandler(bc);`;
 
 const mountHono = `import { Hono } from "hono";
 import { bc } from "./breadcrumb";
 
 const app = new Hono();
-app.all("/admin/traces", (c) => bc.handler(c.req.raw));
-app.all("/admin/traces/*", (c) => bc.handler(c.req.raw));`;
+app.all("/api/breadcrumb", (c) => bc.handler(c.req.raw));
+app.all("/api/breadcrumb/*", (c) => bc.handler(c.req.raw));`;
 
 const mountNode = `import express from "express";
 import { toNodeHandler } from "@breadcrumb-sh/core/node";
 import { bc } from "./breadcrumb";
 
 const app = express();
-app.use("/admin/traces", toNodeHandler(bc));`;
+app.use("/api/breadcrumb", toNodeHandler(bc));`;
 
-const mountOther = `// src/routes/admin/traces/[...path]/+server.ts  (SvelteKit)
+const mountOther = `// src/routes/api/breadcrumb/[...path]/+server.ts  (SvelteKit)
 import { bc } from "$lib/breadcrumb";
 
 export const GET = ({ request }) => bc.handler(request);
 export const POST = ({ request }) => bc.handler(request);`;
+
+const dashboardNext = `// app/admin/traces/[[...slug]]/page.tsx
+import { BreadcrumbDashboard } from "@breadcrumb-sh/react";
+
+export default function TracesPage() {
+  return (
+    <div style={{ height: "100dvh" }}>
+      <BreadcrumbDashboard api="/api/breadcrumb" basePath="/admin/traces" />
+    </div>
+  );
+}`;
+
+const dashboardStyles = `// app/layout.tsx — once, anywhere above the dashboard
+import "@breadcrumb-sh/react/styles.css";`;
+
+const dashboardOther = `import { BreadcrumbDashboard } from "@breadcrumb-sh/react";
+import "@breadcrumb-sh/react/styles.css";
+
+// Render this wherever your app renders React, on a route you guard yourself.
+<div style={{ height: "100dvh" }}>
+  <BreadcrumbDashboard api="/api/breadcrumb" basePath="/admin/traces" />
+</div>;`;
 
 const traceAiSdk = `import { generateText } from "ai";
 
@@ -105,19 +127,23 @@ const defaultPrompt = `I'm adding Breadcrumb — embeddable LLM tracing that sto
 Relevant docs:
 - Quickstart: ${SITE}/docs/quickstart/
 - Mounting the handler (Next.js): ${SITE}/docs/frameworks/nextjs/
+- Mounting the dashboard: ${SITE}/docs/dashboard/
 - Database & adapters: ${SITE}/docs/database/
 - Migrations: ${SITE}/docs/migrations/
 - Instrumenting (the Vercel AI SDK): ${SITE}/docs/instrumenting/ai-sdk/
 - Configuration: ${SITE}/docs/configuration/
 
 Please help me set it up:
-1. Install @breadcrumb-sh/core and the pg driver.
-2. Create a shared bc instance in lib/breadcrumb.ts using the postgres() adapter with basePath "/admin/traces".
-3. Mount bc.handler at /admin/traces for Next.js.
-4. Instrument my LLM calls with the Vercel AI SDK.
-5. Add the authorize option to protect the dashboard before shipping.
+1. Install @breadcrumb-sh/core, @breadcrumb-sh/react, and the pg driver.
+2. Create a shared bc instance in lib/breadcrumb.ts using the postgres() adapter with basePath "/api/breadcrumb".
+3. Mount bc.handler at /api/breadcrumb for Next.js. This is the JSON API, not a UI.
+4. Render <BreadcrumbDashboard api="/api/breadcrumb" basePath="/admin/traces" /> on a page at /admin/traces, and import "@breadcrumb-sh/react/styles.css" once above it.
+5. Instrument my LLM calls with the Vercel AI SDK.
+6. Add the authorize option to protect the API, and guard the dashboard page with my app's own auth, before shipping.
 
 Good to know:
+- The dashboard is a React component mounted at a route I own, not something the handler serves. The API and the page are two separate routes.
+- Give the dashboard a container with a height; it fills its parent.
 - The schema is created automatically in development. For production, generate migration files with "npx breadcrumb generate --database $DATABASE_URL", commit them, and set migrations: "manual".
 - On serverless, call "await bc.flush()" (or waitUntil(bc.flush())) before the response returns so no spans are lost.`;
 ---
@@ -205,8 +231,11 @@ Good to know:
 		</div>
 	</div>
 
-	<h2>4. Mount the handler</h2>
-	<p>Mount <code>bc</code> as a catch-all at your <code>basePath</code>.</p>
+	<h2>4. Mount the API</h2>
+	<p>
+		Mount <code>bc</code> as a catch-all at your <code>basePath</code>. This
+		serves the JSON API your traces are read and written through.
+	</p>
 	<div data-slot data-axis="framework">
 		<div data-variant="next"><Code code={mountNext} lang="ts" {...codeProps} /></div>
 		<div data-variant="hono" hidden><Code code={mountHono} lang="ts" {...codeProps} /></div>
@@ -214,7 +243,28 @@ Good to know:
 		<div data-variant="other" hidden><Code code={mountOther} lang="ts" {...codeProps} /></div>
 	</div>
 
-	<h2>5. Instrument</h2>
+	<h2>5. Mount the dashboard</h2>
+	<p>
+		The dashboard is a React component you render at a route of your own, so it
+		sits behind your auth and inside your layout.
+	</p>
+	<div data-slot data-axis="framework">
+		<div data-variant="next">
+			<Code code={dashboardNext} lang="tsx" {...codeProps} />
+			<p>Then import the stylesheet once, above the dashboard:</p>
+			<Code code={dashboardStyles} lang="tsx" {...codeProps} />
+			<p>
+				Two routes rather than one, because the App Router won't put a route
+				handler and a page on the same segment. See{" "}
+				<a href="/docs/dashboard/">Dashboard</a>.
+			</p>
+		</div>
+		<div data-variant="hono" hidden><Code code={dashboardOther} lang="tsx" {...codeProps} /></div>
+		<div data-variant="node" hidden><Code code={dashboardOther} lang="tsx" {...codeProps} /></div>
+		<div data-variant="other" hidden><Code code={dashboardOther} lang="tsx" {...codeProps} /></div>
+	</div>
+
+	<h2>6. Instrument</h2>
 	<p>Capture a trace from your LLM calls.</p>
 	<div data-slot data-axis="tracing">
 		<div data-variant="ai-sdk"><Code code={traceAiSdk} lang="ts" {...codeProps} /></div>
@@ -228,6 +278,7 @@ Good to know:
 
 	<h2>Next steps</h2>
 	<ul>
+		<li><a href="/docs/dashboard/">Dashboard</a>: props, custom pages, and theming.</li>
 		<li><a href="/docs/frameworks/">Frameworks</a>: more detail on mounting.</li>
 		<li>
 			<a href="/docs/local-development/">Local development</a> and{" "}
@@ -358,19 +409,23 @@ Good to know:
 Relevant docs:
 - Quickstart: ${SITE}/docs/quickstart/
 - Mounting the handler (${fw.label}): ${SITE}/docs/frameworks/${fw.slug}/
+- Mounting the dashboard: ${SITE}/docs/dashboard/
 - Database & adapters: ${SITE}/docs/database/
 - Migrations: ${SITE}/docs/migrations/
 - Instrumenting (${tr.label}): ${SITE}/docs/instrumenting/${tr.slug}/
 - Configuration: ${SITE}/docs/configuration/
 
 Please help me set it up:
-1. Install @breadcrumb-sh/core and the ${db.driver} driver.
-2. Create a shared bc instance in lib/breadcrumb.ts using the ${db.adapter}() adapter with basePath "/admin/traces".
-3. Mount bc.handler at /admin/traces for ${fw.label}.
-4. Instrument my LLM calls with ${tr.label}.
-5. Add the authorize option to protect the dashboard before shipping.
+1. Install @breadcrumb-sh/core, @breadcrumb-sh/react, and the ${db.driver} driver.
+2. Create a shared bc instance in lib/breadcrumb.ts using the ${db.adapter}() adapter with basePath "/api/breadcrumb".
+3. Mount bc.handler at /api/breadcrumb for ${fw.label}. This is the JSON API, not a UI.
+4. Render <BreadcrumbDashboard api="/api/breadcrumb" basePath="/admin/traces" /> on a page at /admin/traces, and import "@breadcrumb-sh/react/styles.css" once above it.
+5. Instrument my LLM calls with ${tr.label}.
+6. Add the authorize option to protect the API, and guard the dashboard page with my app's own auth, before shipping.
 
 Good to know:
+- The dashboard is a React component mounted at a route I own, not something the handler serves. The API and the page are two separate routes.
+- Give the dashboard a container with a height; it fills its parent.
 - The schema is created automatically in development. For production, generate migration files with "npx breadcrumb generate --database $DATABASE_URL", commit them, and set migrations: "manual".
 - On serverless, call "await bc.flush()" (or waitUntil(bc.flush())) before the response returns so no spans are lost.`;
 	}

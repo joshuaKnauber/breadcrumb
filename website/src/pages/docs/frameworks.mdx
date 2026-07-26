@@ -7,9 +7,10 @@ description: Mount the Breadcrumb handler in your framework — the fetch-native
 # Frameworks
 
 Breadcrumb's handler is a single fetch-native function — it takes a `Request`
-and returns a `Response`. You mount it as a catch-all at your `basePath` so it
-receives every method and sub-path underneath. Pick your framework below for the
-exact setup.
+and returns a `Response`, and it serves the JSON API your traces are read and
+written through. You mount it as a catch-all at your `basePath` so it receives
+every method and sub-path underneath. Pick your framework below for the exact
+setup.
 
 - [Next.js](/docs/frameworks/nextjs/)
 - [Hono](/docs/frameworks/hono/)
@@ -19,7 +20,11 @@ exact setup.
 {/* prettier-ignore */}
 > [!IMPORTANT]
 > The route you mount at must match the `basePath` you passed to `breadcrumb()`.
-> Every example uses `/admin/traces`.
+> Every example uses `/api/breadcrumb`.
+
+The handler serves data, not HTML. To look at your traces, mount the
+[dashboard component](/docs/dashboard/) at a separate route in your frontend and
+point it at this one.
 
 ## The shared instance
 
@@ -32,16 +37,16 @@ import { postgres } from "@breadcrumb-sh/core/adapters";
 
 export const bc = breadcrumb({
   database: postgres(process.env.DATABASE_URL!),
-  basePath: "/admin/traces",
+  basePath: "/api/breadcrumb",
   authorize: (req) => isAdmin(req),
 });
 ```
 
-## Protecting the dashboard
+## Protecting the API
 
-The dashboard and query routes are unauthenticated by default. Guard them with
-the `authorize` option — it runs on every dashboard and query request, but not
-on the routes that carry their own key:
+The query routes are unauthenticated by default. Guard them with the
+`authorize` option — it runs on every query request, but not on the routes that
+carry their own key:
 
 ```ts
 breadcrumb({
@@ -62,5 +67,9 @@ Middleware over the whole mount runs before Breadcrumb sees the request, so it
 turns away your trace exporters and your coding agent along with everyone else.
 Exclude those two paths, or use `authorize`, which Breadcrumb applies only after
 the self-authenticating routes have had their turn.
+
+The route your dashboard page lives on is yours, so guard it the way you guard
+any other page in your app. `authorize` protects the data; your own auth
+protects the page.
 
 See [Production](/docs/production/) for the full checklist.

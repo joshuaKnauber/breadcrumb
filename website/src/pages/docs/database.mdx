@@ -57,7 +57,7 @@ const database = process.env.DATABASE_URL
   ? postgres(process.env.DATABASE_URL)
   : sqlite(".breadcrumb/dev.db");
 
-export const bc = breadcrumb({ database, basePath: "/admin/traces" });
+export const bc = breadcrumb({ database, basePath: "/api/breadcrumb" });
 ```
 
 ## Migrations

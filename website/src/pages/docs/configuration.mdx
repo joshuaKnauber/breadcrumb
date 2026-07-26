@@ -11,7 +11,7 @@ Everything is passed to the `breadcrumb()` factory.
 ```ts
 const bc = breadcrumb({
   database: postgres(process.env.DATABASE_URL!),
-  basePath: "/admin/traces",
+  basePath: "/api/breadcrumb",
   environment: process.env.VERCEL_ENV,
   ingest: { apiKey: process.env.BREADCRUMB_KEY },
   authorize: (req) => isAdmin(req),
@@ -29,10 +29,10 @@ const bc = breadcrumb({
 | Option | Type | Description |
 | --- | --- | --- |
 | `database` | `DatabaseAdapter` | **Required.** `sqlite(path)` or `postgres(url)` from `@breadcrumb-sh/core/adapters`, or your app's existing pool. |
-| `basePath` | `string` | Where the handler is mounted. Default `"/breadcrumb"`. |
+| `basePath` | `string` | Where the handler is mounted, and what the [dashboard's](/docs/dashboard/) `api` prop must point at. Default `"/breadcrumb"`. |
 | `environment` | `string` | Stamped on every span. Defaults to `VERCEL_ENV` → `NODE_ENV` → `"development"`. |
 | `ingest` | `{ apiKey }` | Enables the HTTP ingest endpoints for external services (OTLP + JSON). Omit to keep ingest closed. |
-| `authorize` | `(req) => boolean \| Response` | Guards the dashboard + query routes. Return `true` to allow, `false` for 401, or a `Response` (e.g. a redirect). |
+| `authorize` | `(req) => boolean \| Response` | Guards the query routes. Return `true` to allow, `false` for 401, or a `Response` (e.g. a redirect). The dashboard *page* is yours to guard. |
 | `pricing` | `Record<string, ModelPrice>` | Your per-model prices (USD per 1M tokens). Breadcrumb ships no prices — omit and cost stays whatever you set explicitly. |
 | `retention` | `RetentionOptions` | Per-environment windows. Bounded sweeps piggyback on ingest; no cron needed. |
 | `redact` | `(span) => span \| void` | Scrub PII or trim payloads before storage. Runs on every span from every path. |

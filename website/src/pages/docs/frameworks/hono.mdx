@@ -16,14 +16,22 @@ import { bc } from "./breadcrumb";
 
 const app = new Hono();
 
-app.all("/admin/traces", (c) => bc.handler(c.req.raw));
-app.all("/admin/traces/*", (c) => bc.handler(c.req.raw));
+app.all("/api/breadcrumb", (c) => bc.handler(c.req.raw));
+app.all("/api/breadcrumb/*", (c) => bc.handler(c.req.raw));
 ```
 
-The first route matches `/admin/traces` exactly; the second matches everything
+The first route matches `/api/breadcrumb` exactly; the second matches everything
 beneath it. Both return the handler's `Response` directly.
+
+## Viewing the traces
+
+This mounts the API. The [dashboard](/docs/dashboard/) is a React component, so
+render it from whatever frontend you serve alongside this app, pointed at
+`api="/api/breadcrumb"`. If you have no React frontend, query the data directly
+with [`bc.api`](/docs/querying/).
 
 ## Next steps
 
+- [Dashboard](/docs/dashboard/): mount the UI.
 - [Database & migrations](/docs/database/): choose an adapter.
 - [Instrumenting](/docs/instrumenting/): capture your first trace.

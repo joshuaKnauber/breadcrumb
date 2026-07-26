@@ -20,14 +20,14 @@ import { toNodeHandler } from "@breadcrumb-sh/core/node";
 import { bc } from "./breadcrumb";
 
 const app = express();
-app.use("/admin/traces", toNodeHandler(bc));
+app.use("/api/breadcrumb", toNodeHandler(bc));
 ```
 
 Put your own auth middleware before this line, or use the `authorize` option.
 Middleware here covers the whole mount, including `/api/ingest/*` and
 `/api/mcp`, which authenticate with their own keys rather than a session — so
 either exclude those paths or reach for `authorize` instead. See
-[Protecting the dashboard](/docs/frameworks/#protecting-the-dashboard).
+[Protecting the API](/docs/frameworks/#protecting-the-api).
 
 ## Raw node:http
 
@@ -41,12 +41,20 @@ import { bc } from "./breadcrumb";
 
 const handler = toNodeHandler(bc);
 createServer((req, res) => {
-  if (req.url?.startsWith("/admin/traces")) return handler(req, res);
+  if (req.url?.startsWith("/api/breadcrumb")) return handler(req, res);
   // …the rest of your app
 }).listen(3000);
 ```
 
+## Viewing the traces
+
+This mounts the API. The [dashboard](/docs/dashboard/) is a React component, so
+render it from whatever frontend this server backs, pointed at
+`api="/api/breadcrumb"`. If you have no React frontend, query the data directly
+with [`bc.api`](/docs/querying/).
+
 ## Next steps
 
+- [Dashboard](/docs/dashboard/): mount the UI.
 - [Database & migrations](/docs/database/): choose an adapter.
 - [Instrumenting](/docs/instrumenting/): capture your first trace.

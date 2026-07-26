@@ -1,13 +1,13 @@
 ---
 layout: ../../layouts/DocsLayout.astro
 title: Production
-description: Deploy Breadcrumb with Postgres, migrations, dashboard auth, serverless flushing, and retention.
+description: Deploy Breadcrumb with Postgres, migrations, auth on the API and the dashboard, serverless flushing, and retention.
 ---
 
 # Production
 
 Going to production means three changes from the local setup: a real database,
-a locked-down dashboard, and — if you're on serverless — making sure spans flush
+locked-down access, and — if you're on serverless — making sure spans flush
 before the runtime freezes. This page is the deploy checklist.
 
 ## Use Postgres
@@ -21,7 +21,7 @@ import { pool } from "./db";
 
 export const bc = breadcrumb({
   database: postgres(pool),
-  basePath: "/admin/traces",
+  basePath: "/api/breadcrumb",
   authorize: (req) => isAdmin(req),
 });
 ```
@@ -48,11 +48,12 @@ If you'd rather apply the schema directly in a deploy step instead of committing
 files, `npx breadcrumb migrate --database $DATABASE_URL` also works. See
 [Migrations](/docs/migrations/) for both workflows.
 
-## Lock down the dashboard
+## Lock down access
 
-The dashboard and query routes are unauthenticated by default. In production you
-must guard them. Use the `authorize` option, which runs on every dashboard and
-query request:
+There are two doors, and you have to close both.
+
+**The API.** Query routes are unauthenticated by default. Guard them with
+`authorize`, which runs on every query request:
 
 ```ts
 breadcrumb({
@@ -60,12 +61,31 @@ breadcrumb({
 });
 ```
 
+**The page.** The route you render the [dashboard](/docs/dashboard/) at is an
+ordinary page in your app, so it is guarded by your app's own auth like any
+other admin page. Breadcrumb has no say in it.
+
+Guarding only the page is not enough. The dashboard reads everything over the
+API, so an unguarded API hands your traces to anyone who requests the URL
+directly, whether or not they can load the page.
+
+```tsx
+// app/admin/traces/[[...slug]]/page.tsx
+import { redirect } from "next/navigation";
+
+export default async function TracesPage() {
+  const session = await auth();
+  if (!session?.user.isAdmin) redirect("/login");
+  return <BreadcrumbDashboard api="/api/breadcrumb" basePath="/admin/traces" />;
+}
+```
+
 Ingest routes are separate: they're closed unless you set an `ingest.apiKey`,
 and they authenticate with that key rather than `authorize`. The
 [MCP](/docs/mcp/) endpoint works the same way, with its own keys.
 
-This also decides who can connect a coding agent. MCP keys are minted from the
-dashboard, so `authorize` is what stands between a stranger and a key that reads
+`authorize` also decides who can connect a coding agent. MCP keys are minted
+through the API, so it is what stands between a stranger and a key that reads
 your traces.
 
 {/* prettier-ignore */}
@@ -139,7 +159,8 @@ breadcrumb({
 
 - Point `database` at Postgres, ideally your existing pool.
 - Run `breadcrumb migrate` in your deploy step.
-- Set `authorize` to protect the dashboard, which also gates who can create MCP keys.
+- Set `authorize` to protect the API, which also gates who can create MCP keys.
+- Guard the dashboard route with your app's own auth.
 - On serverless, set `flushMode: "sync"` and flush before returning.
 - Set `retention` windows for your environments.
 - Add `redact` or `maxPayloadChars` if traces may contain sensitive data.
@@ -147,4 +168,5 @@ breadcrumb({
 ## Next steps
 
 - [Configuration](/docs/configuration/): the full option reference.
-- [Querying your data](/docs/querying/): build a custom dashboard.
+- [Dashboard](/docs/dashboard/): mounting the UI at your own route.
+- [Querying your data](/docs/querying/): build your own views.

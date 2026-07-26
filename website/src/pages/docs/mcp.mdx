@@ -11,8 +11,8 @@ them, so instead of pasting a stack trace into a chat you can ask "which model
 is burning the budget" or "what failed in the last hour" and have the agent
 query the data itself.
 
-Breadcrumb serves this over MCP at `basePath + /api/mcp`, mounted in your app
-alongside the dashboard. There is no extra service to run and no database
+Breadcrumb serves this over MCP at `basePath + /api/mcp`, on the same handler
+you already mounted. There is no extra service to run and no database
 credentials to hand out.
 
 {/* prettier-ignore */}
@@ -25,12 +25,13 @@ credentials to hand out.
 
 ## Connect an agent
 
-Open the **MCP** tab in your dashboard and create a key. The full key is shown
-once, on the row you just created, along with a copy-paste command for Claude
-Code, Codex, and a generic JSON config.
+Open the **MCP** tab in your [dashboard](/docs/dashboard/) and create a key. The
+full key is shown once, on the row you just created, along with a copy-paste
+command for Claude Code, Codex, and a generic JSON config, with your own URL
+already filled in.
 
 ```bash
-claude mcp add --transport http breadcrumb https://yourapp.com/breadcrumb/api/mcp \
+claude mcp add --transport http breadcrumb https://yourapp.com/api/breadcrumb/api/mcp \
   --header "Authorization: Bearer bcmcp_…"
 ```
 
@@ -74,8 +75,8 @@ takes effect immediately.
 {/* prettier-ignore */}
 > [!NOTE]
 > Minting a key is guarded by your `authorize` function, the same one that
-> guards the dashboard. Anyone who can already read traces in the browser can
-> create a key that reads the same data. If your dashboard is open, so is this.
+> guards every other query route. Anyone who can already read traces can create
+> a key that reads the same data. If your API is open, so is this.
 
 ## Local and production
 
@@ -126,7 +127,7 @@ someone creates a key.
 ## Next steps
 
 - [Configuration](/docs/configuration/): every `breadcrumb()` option.
-- [Production](/docs/production/): locking down the dashboard, which also
-  controls who can mint a key.
+- [Production](/docs/production/): locking down the API, which also controls who
+  can mint a key.
 - [Migrations](/docs/migrations/): the `breadcrumb_mcp_keys` table keys are
   stored in.
