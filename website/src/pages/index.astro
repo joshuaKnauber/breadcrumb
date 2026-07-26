@@ -1,0 +1,498 @@
+---
+import { Code } from "astro:components";
+import Layout from "../layouts/Layout.astro";
+import Logo from "../components/Logo.astro";
+
+const CODE_THEME = "night-owl" as const;
+
+// The waterfall is drawn on a fixed character grid: BARS columns span the whole
+// 4.81s run, so pad/len below are just the same offsets the real UI uses.
+const BARS = 40;
+
+const raw = [
+	{ kind: "agent", name: "support-reply", depth: 0, dur: "4.81s", pad: 0, len: 40, fill: "─", tone: "", err: true },
+	{ kind: "retrieval", name: "load-context", depth: 1, dur: "210ms", pad: 0, len: 2, fill: "█", tone: "", err: false },
+	{ kind: "span", name: "generate", depth: 1, dur: "3.74s", pad: 2, len: 31, fill: "─", tone: "", err: false },
+	{ kind: "llm", name: "streamText.doStream", depth: 2, dur: "1.64s", pad: 2, len: 14, fill: "█", tone: "hot", err: false },
+	{ kind: "tool", name: "lookup-order", depth: 2, dur: "240ms", pad: 16, len: 2, fill: "█", tone: "", err: false },
+	{ kind: "llm", name: "streamText.doStream", depth: 2, dur: "1.82s", pad: 18, len: 15, fill: "█", tone: "hot", err: false },
+	{ kind: "tool", name: "persist-reply", depth: 1, dur: "782ms", pad: 33, len: 7, fill: "█", tone: "bad", err: true },
+];
+
+const rows = raw.map((r) => ({
+	...r,
+	kindCol: r.kind.padEnd(10),
+	nameCol: (" ".repeat(r.depth * 2) + r.name).padEnd(24),
+	durCol: r.dur.padStart(6),
+	gap: "  " + " ".repeat(r.pad),
+	bar: r.fill.repeat(r.len),
+	mark: r.err ? " ✕" : "",
+}));
+
+const head = "kind".padEnd(10) + "span".padEnd(24) + "dur".padStart(6) + "  ";
+const axis = "0" + " ".repeat(BARS - 6) + "4.81s";
+
+const flow = `your app    ──▶  breadcrumb  ──▶  your database     ──▶  your dashboard
+bc.trace()       normalize        breadcrumb_spans       <Dashboard />`;
+
+// Stack-agnostic version of the quickstart prompt: the assistant works the
+// stack out of the codebase instead of us asking for it up front.
+const SITE = "https://breadcrumb.sh";
+const setupPrompt = `I'm adding Breadcrumb to my TypeScript app: embeddable LLM tracing that stores traces in a database I own and renders its dashboard as a React component inside my own app.
+
+Docs:
+- Introduction: ${SITE}/docs/
+- Quickstart: ${SITE}/docs/quickstart/
+- Mounting the handler: ${SITE}/docs/frameworks/
+- Mounting the dashboard: ${SITE}/docs/dashboard/
+- Database & adapters: ${SITE}/docs/database/
+- Instrumenting: ${SITE}/docs/instrumenting/
+- Custom UI (client, React hooks, kit): ${SITE}/docs/react/
+- MCP for coding agents: ${SITE}/docs/mcp/
+- Production: ${SITE}/docs/production/
+
+Read those, then set it up:
+1. Work out my stack from the codebase: framework, database, and how I call models.
+2. Install @breadcrumb-sh/core and @breadcrumb-sh/react plus the driver for my database.
+3. Create one shared bc instance with the matching adapter and a basePath.
+4. Mount bc.handler at that path, behind an authorize check. That serves the JSON API, not a UI.
+5. Render <BreadcrumbDashboard /> on a page route I own, pointed at that basePath, and import "@breadcrumb-sh/react/styles.css" once above it. Guard that route with my app's existing auth.
+6. Instrument my existing LLM calls and confirm a trace lands.
+7. Open the dashboard's MCP tab, create a key, and connect yourself to it, so you can query these traces directly when I ask you to debug something.
+
+Good to know:
+- The API and the dashboard page are two separate routes. The handler serves no HTML.
+- The dashboard fills its container, so give it one with a height.
+- The schema is created automatically in development. For production, generate migration files with "npx breadcrumb generate", commit them, and set migrations: "manual".
+- On serverless, await bc.flush() before the response returns so no spans are lost.`;
+
+const instance = `import { breadcrumb } from "@breadcrumb-sh/core";
+import { postgres } from "@breadcrumb-sh/core/adapters";
+
+export const bc = breadcrumb({
+  database: postgres(process.env.DATABASE_URL!),
+  basePath: "/api/breadcrumb",
+  mcp: { hidePayloads: true }, // your agent reads traces, not prompts
+});`;
+
+// A panel nobody ships for you: your queue, your verdict, your buttons.
+const panel = `┌ review queue ──────────────┬ trace 8f21c4 ─────────────────┐
+│ ● refund #4192    $0.004   │ user   where is my order?     │
+│ ○ refund #4193    $0.002   │ tool   lookup-order   240ms   │
+│ ○ signup  #877    $0.001   │ model  gpt-5          1.64s   │
+│                            │ reply  it shipped friday      │
+│ 3 flagged today            │ [ approve ]      [ reject ]   │
+└────────────────────────────┴───────────────────────────────┘`;
+
+const legend = "█ self time    ─ waiting on children    ✕ failed";
+
+// Real columns from breadcrumb_spans: user_id, model, status ("ok" | "error"), cost.
+const analytics = `// after \`prisma db pull\`, the table is a model like any other
+const spend = await prisma.breadcrumb_spans.groupBy({
+  by: ["model"],
+  where: { user_id: customer.id, status: "ok" },
+  _sum: { cost: true },
+});`;
+
+const custom = `import { BreadcrumbDashboard, useSessions, useTrace } from "@breadcrumb-sh/react";
+import { flowRows } from "@breadcrumb-sh/core/kit";
+
+function ReviewQueue() {
+  const [selected, setSelected] = useState<string | null>(null);
+  const { data: queue } = useSessions({ status: "error" });
+  const { data: spans = [] } = useTrace(selected);
+  const rows = flowRows(spans);
+  // Your layout, your domain: the reply beside the docs it cited,
+  // the reviewer's verdict, the retry that finally worked.
+}
+
+// Ships as a page in the dashboard, beside the ones that came in the box.
+<BreadcrumbDashboard
+  pages={[{ name: "review", label: "Review", element: <ReviewQueue /> }]}
+/>;`;
+
+const aisdk = `const { text } = await streamText({
+  model: openai("gpt-5"),
+  prompt,
+  experimental_telemetry: bc.telemetry({
+    functionId: "generate-answer",
+    metadata: { userId, sessionId },
+  }),
+});`;
+
+const usage = `await bc.trace("support-reply", async (t) => {
+  const docs   = await loadContext(question);
+  const answer = await generate(docs);
+  await db.insert(replies).values(answer);
+});`;
+---
+
+<Layout>
+	<div class="mx-auto max-w-[760px] px-6">
+		<header class="flex h-[76px] items-center gap-5">
+			<a href="/" class="flex items-center gap-2.5 text-fg">
+				<Logo class="h-[17px] w-[17px]" />
+				<span class="text-[15px] font-semibold tracking-[-0.02em]">breadcrumb</span>
+			</a>
+			<nav class="ml-auto flex items-center gap-4 font-mono text-[12.5px] text-faint">
+				<a href="/docs/" class="hover:text-fg transition-colors">docs</a>
+				<a
+					href="https://github.com/joshuaKnauber/breadcrumb"
+					target="_blank"
+					rel="noreferrer"
+					class="hover:text-fg transition-colors">github</a
+				>
+				<a
+					href="https://x.com/joshuaKnauber"
+					target="_blank"
+					rel="noreferrer"
+					class="hover:text-fg transition-colors">x</a
+				>
+			</nav>
+		</header>
+
+		<article class="doc">
+			<h1>Roll your own LLM tracing in minutes</h1>
+			<p class="lede">
+				LLM tracing for TypeScript apps that installs like a library, not a service. Traces land in
+				the database you already run, and the dashboard is a component you mount in your own app.
+			</p>
+
+			<div class="actions">
+				<button id="copy-prompt" type="button">
+					<i class="ph ph-copy"></i>
+					<span class="swap">
+						<span>Copy setup prompt</span>
+						<span aria-hidden="true">Copied</span>
+					</span>
+				</button>
+				<a href="/docs/quickstart/">or read the quickstart</a>
+			</div>
+			<span id="prompt-text" hidden>{setupPrompt}</span>
+
+			<h2>Setup</h2>
+			<Code lang="ts" code={instance} theme={CODE_THEME} />
+			<ol class="steps">
+				<li>
+					<strong>Integrate in your stack.</strong> One instance, pointed at the database you already
+					run, mounted in your app behind your own auth.
+				</li>
+				<li>
+					<strong>Instrument.</strong> Pass <code>bc.telemetry()</code> to the AI SDK, and wrap everything
+					around it in <code>bc.trace()</code>.
+				</li>
+				<li>
+					<strong>View and debug with MCP.</strong> Read the dashboard yourself, or hand your coding
+					agent a key and let it query the traces.
+				</li>
+			</ol>
+
+			<h2>Instrumenting a request</h2>
+			<p>
+				Model calls instrument themselves. Pass <code>bc.telemetry()</code> where the Vercel AI SDK
+				takes <code>experimental_telemetry</code> and the model, provider, token counts, cost and
+				payloads are read from the attributes the SDK already emits.
+			</p>
+			<Code lang="ts" code={aisdk} theme={CODE_THEME} />
+			<p>
+				Wrap the work around them in <code>bc.trace()</code> to get the retrieval, the tool calls and
+				the database write on the same timeline.
+			</p>
+			<Code lang="ts" code={usage} theme={CODE_THEME} />
+
+			<div class="ascii wf">
+				<div class="arow head">{head}<span class="ax">{axis}</span></div>
+				{
+					rows.map((r) => (
+						<div class:list={["arow", r.err && "err"]}>
+							<span class="k">{r.kindCol}</span>
+							<span class="n">{r.nameCol}</span>
+							<span class="d">{r.durCol}</span>
+							<span class="k">{r.gap}</span>
+							<span class:list={["b", r.tone, r.fill === "─" && "wait"]}>{r.bar}</span>
+							<span class="x">{r.mark}</span>
+						</div>
+					))
+				}
+				<div class="arow legend">{legend}</div>
+			</div>
+
+			<h2>Storage and querying</h2>
+			<div class="ascii">{flow}</div>
+			<p>
+				Spans land in one table, <code>breadcrumb_spans</code>, in the database your app already
+				writes to. Not an export, not a webhook, not a read-only API over someone else's schema, so
+				your own analytics are ordinary queries with the ORM you already use.
+			</p>
+			<Code lang="ts" code={analytics} theme={CODE_THEME} />
+			<p>
+				Cost per customer on their billing page. Failures per tenant. Whether the accounts that
+				churned were the ones hitting the slow path. Those need the traces and your users table in
+				the same query, which is the one thing a hosted tool can never do.
+			</p>
+			<p class="note">
+				Retention is a window you set per environment, swept as traces arrive. Nothing is metered per
+				event, so you never have to sample or drop payloads to keep a bill down.
+			</p>
+
+			<h2>Build a custom UI for your tracing</h2>
+			<p>
+				A hosted dashboard has to stay generic, because it serves everyone's app. Yours only has to
+				serve yours, and because the dashboard is a component, your panel ships as a page inside it:
+			</p>
+			<div class="ascii">{panel}</div>
+			<p>
+				Mount the built-in dashboard on day one, then add your own pages to it. When it stops fitting entirely, the same data is there as
+				React hooks and typed queries, with a headless kit for span tree assembly, self time and
+				payload parsing.
+			</p>
+			<Code lang="tsx" code={custom} theme={CODE_THEME} />
+
+			<h2>Documentation</h2>
+			<ul>
+				<li><a href="/docs/quickstart/">Quickstart</a>: install, mount, capture a first trace.</li>
+				<li><a href="/docs/frameworks/">Frameworks</a>: Next.js, Hono, or plain Node.</li>
+				<li><a href="/docs/dashboard/">Dashboard</a>: mount the UI, add your own pages.</li>
+				<li><a href="/docs/instrumenting/ai-sdk/">Instrumenting</a>: the AI SDK, OpenTelemetry, manual spans.</li>
+				<li><a href="/docs/react/">React</a>: hooks and the headless kit for your own panel.</li>
+				<li><a href="/docs/querying/">Querying</a>: the typed API over your own traces.</li>
+				<li><a href="/docs/production/">Production</a>: auth, retention, cost tables, going live.</li>
+			</ul>
+
+			<footer>
+				<span>MIT licensed.</span>
+				<span class="flex gap-5">
+					<a href="https://github.com/joshuaKnauber/breadcrumb" target="_blank" rel="noreferrer">
+						github
+					</a>
+					<a href="https://x.com/joshuaKnauber" target="_blank" rel="noreferrer">@joshuaKnauber</a>
+				</span>
+			</footer>
+		</article>
+	</div>
+</Layout>
+
+<style>
+	/* Four sizes on the page: 27 and 17 for headings, 15 for everything written
+	   in sans, 12.5 for everything in mono. Emphasis is colour and weight. */
+	.doc {
+		padding: 40px 0 0;
+		color: var(--color-muted);
+		font-size: 15px;
+		line-height: 1.75;
+	}
+
+	h1 {
+		font-size: 32px;
+		font-weight: 600;
+		letter-spacing: -0.025em;
+		line-height: 1.2em;
+		color: var(--color-fg);
+	}
+	h2 {
+		margin: 54px 0 14px;
+		font-size: 17px;
+		font-weight: 600;
+		letter-spacing: -0.015em;
+		color: var(--color-fg);
+	}
+	/* The markdown source, left in as a marker for where you are in the page. */
+	h1::before,
+	h2::before {
+		font-family: var(--font-mono);
+		font-weight: 400;
+		color: var(--color-faint);
+	}
+	h1::before {
+		content: "# ";
+	}
+	h2::before {
+		content: "## ";
+	}
+
+	p {
+		margin: 14px 0;
+		max-width: 68ch;
+	}
+	.lede {
+		margin-top: 16px;
+		color: var(--color-fg);
+	}
+	.note {
+		color: var(--color-faint);
+	}
+	code {
+		font-family: var(--font-mono);
+		font-size: 0.84em;
+		color: var(--color-fg);
+	}
+	.doc p a,
+	.doc li a {
+		color: var(--color-fg);
+		text-decoration: underline;
+		text-decoration-color: var(--color-line-strong);
+		text-underline-offset: 3px;
+	}
+	.doc p a:hover,
+	.doc li a:hover {
+		text-decoration-color: var(--color-fg);
+	}
+
+	ul {
+		margin: 14px 0;
+		padding: 0;
+		list-style: none;
+		display: flex;
+		flex-direction: column;
+		gap: 7px;
+	}
+	li::before {
+		content: "- ";
+		font-family: var(--font-mono);
+		color: var(--color-faint);
+	}
+
+	.steps {
+		counter-reset: step;
+		margin: 14px 0;
+		padding: 0;
+		list-style: none;
+		display: flex;
+		flex-direction: column;
+		gap: 7px;
+		max-width: 68ch;
+		margin-top: 20px;
+	}
+	.steps li {
+		counter-increment: step;
+	}
+	/* Numbered, but in the same faint mono gutter the bullet lists use. */
+	.steps li::before {
+		content: counter(step) ". ";
+		font-family: var(--font-mono);
+		color: var(--color-faint);
+	}
+	.steps strong {
+		font-weight: 500;
+		color: var(--color-fg);
+	}
+
+	.actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 18px;
+		margin: 26px 0 0;
+	}
+	.actions button {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		height: 40px;
+		padding: 0 16px;
+		border: 0;
+		background: var(--color-fg);
+		color: var(--color-canvas);
+		font-family: var(--font-sans);
+		font-size: 15px;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+		cursor: pointer;
+		transition: opacity 0.15s ease;
+	}
+	.actions button:hover {
+		opacity: 0.88;
+	}
+	.actions button i {
+		font-size: 15px;
+	}
+	.actions a {
+		color: var(--color-muted);
+		text-decoration: none;
+	}
+	.actions a:hover {
+		color: var(--color-fg);
+	}
+
+	/* ---------- ascii figures ---------- */
+	.ascii {
+		margin: 22px 0;
+		font-family: var(--font-mono);
+		font-size: 12.5px;
+		line-height: 1.6;
+		white-space: pre;
+		overflow-x: auto;
+		color: var(--color-faint);
+		-webkit-font-smoothing: antialiased;
+	}
+	.ascii.tree {
+		color: var(--color-muted);
+	}
+	.arow {
+		white-space: pre;
+	}
+	.arow.head {
+		color: var(--color-faint);
+		padding-bottom: 6px;
+	}
+	.arow.legend {
+		padding-top: 10px;
+	}
+	.arow .k {
+		color: var(--color-faint);
+	}
+	.arow .n {
+		color: var(--color-fg);
+	}
+	.arow .d {
+		color: var(--color-muted);
+	}
+	.arow .b {
+		color: var(--color-neutral-bar);
+	}
+	.arow .b.wait {
+		color: var(--color-line-strong);
+	}
+	.arow .b.hot {
+		color: var(--color-heat-hi);
+	}
+	.arow .b.bad,
+	.arow .x {
+		color: var(--color-err);
+	}
+	.arow.err .n {
+		color: var(--color-err);
+	}
+
+	footer {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		gap: 12px;
+		margin-top: 64px;
+		padding: 18px 0 60px;
+		border-top: 1px solid var(--color-line);
+		font-family: var(--font-mono);
+		font-size: 12.5px;
+		color: var(--color-faint);
+	}
+	footer a {
+		color: var(--color-faint);
+		text-decoration: none;
+	}
+	footer a:hover {
+		color: var(--color-fg);
+	}
+</style>
+
+<script>
+	const btn = document.getElementById("copy-prompt") as HTMLButtonElement | null;
+	const text = document.getElementById("prompt-text");
+	btn?.addEventListener("click", async () => {
+		try {
+			await navigator.clipboard.writeText(text?.textContent ?? "");
+			btn.classList.add("copied");
+			setTimeout(() => btn.classList.remove("copied"), 1500);
+		} catch {}
+	});
+</script>

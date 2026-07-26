@@ -1,0 +1,53 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: Querying your data
+description: The server-side query API for building a custom tracing UI.
+---
+
+# Querying your data
+
+Your traces live in your database, so your own views of them can look like your product. `bc.api` is the headless, typed query surface — call it from a Server Component, a route handler, or anywhere server-side. No HTTP, no client.
+
+```ts
+const { items, nextCursor } = await bc.api.listSessions({
+  environment: "production",
+  status: "error",
+  limit: 50,
+});
+```
+
+## Methods
+
+| Method | Returns |
+| --- | --- |
+| `listTraces(filter?)` | `Page<TraceSummary>` — one row per run, newest first. |
+| `listSessions(filter?)` | `Page<SessionSummary>` — traces grouped by session. |
+| `listRuns({ sessionKey })` | `RunSummary[]` — the runs within a session. |
+| `getTrace({ id })` | `SpanRecord[]` — every span in a trace. |
+| `getSpan({ id })` | `SpanRecord \| null`. |
+| `stats(filter?)` | `Stats` — runs, error rate, cost, tokens, latency. |
+| `costSummary(opts?)` | `CostSummary` — the Cost view's data. |
+| `listEnvironments()` | `string[]`. |
+
+## Filters & pagination
+
+Every list and `stats` call takes the same filter. Each dimension selects **traces** (a trace matches if any of its spans qualifies), so a filtered list still aggregates each trace's full span set — counts and cost stay whole.
+
+```ts
+type TraceFilter = {
+  environment?: string;
+  userId?: string;
+  model?: string;
+  status?: "ok" | "error";
+  since?: number; // epoch ms
+  until?: number;
+};
+```
+
+Lists are keyset-paginated: pass `limit` and the `nextCursor` from the previous page. `nextCursor` is `null` at the end.
+
+## Beyond the built-in queries
+
+`bc.api` is a curated surface. When you need an aggregation it doesn't cover — "cost by tenant," "p95 by model" — remember it's **your** database. Query the `breadcrumb_spans` table directly with your own Drizzle/Prisma/pg client. A trace is spans sharing a `trace_id`; the root is the span with `parent_span_id IS NULL`; a session is `session_id`. Migrations are additive-only, so the schema is a stable contract.
+
+To read the same data from the browser instead of the server, use the [typed client and React hooks](/docs/react/). To add a view to the shipped dashboard rather than replace it, see [custom pages](/docs/dashboard/#adding-pages).

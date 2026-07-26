@@ -1,0 +1,172 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: Production
+description: Deploy Breadcrumb with Postgres, migrations, auth on the API and the dashboard, serverless flushing, and retention.
+---
+
+# Production
+
+Going to production means three changes from the local setup: a real database,
+locked-down access, and — if you're on serverless — making sure spans flush
+before the runtime freezes. This page is the deploy checklist.
+
+## Use Postgres
+
+Switch the adapter to Postgres, and pass your app's existing pool so Breadcrumb
+shares connections rather than opening its own:
+
+```ts
+import { postgres } from "@breadcrumb-sh/core/adapters";
+import { pool } from "./db";
+
+export const bc = breadcrumb({
+  database: postgres(pool),
+  basePath: "/api/breadcrumb",
+  authorize: (req) => isAdmin(req),
+});
+```
+
+## Own your migrations
+
+Breadcrumb migrates lazily on first use, which is convenient in development but a
+poor fit for production — it needs schema privileges at runtime and changes the
+database outside your deploy. For production we recommend generating migration
+files you commit and apply with your own tooling:
+
+```bash
+npx breadcrumb generate --database $DATABASE_URL
+```
+
+Commit the generated `.sql` file, apply it in your deploy step, and turn off
+runtime migrations so the app never runs DDL:
+
+```ts
+breadcrumb({ migrations: "manual" });
+```
+
+If you'd rather apply the schema directly in a deploy step instead of committing
+files, `npx breadcrumb migrate --database $DATABASE_URL` also works. See
+[Migrations](/docs/migrations/) for both workflows.
+
+## Lock down access
+
+There are two doors, and you have to close both.
+
+**The API.** Query routes are unauthenticated by default. Guard them with
+`authorize`, which runs on every query request:
+
+```ts
+breadcrumb({
+  authorize: (req) => isAdmin(req), // true to allow, false for 401, or a Response
+});
+```
+
+**The page.** The route you render the [dashboard](/docs/dashboard/) at is an
+ordinary page in your app, so it is guarded by your app's own auth like any
+other admin page. Breadcrumb has no say in it.
+
+Guarding only the page is not enough. The dashboard reads everything over the
+API, so an unguarded API hands your traces to anyone who requests the URL
+directly, whether or not they can load the page.
+
+```tsx
+// app/admin/traces/[[...slug]]/page.tsx
+import { redirect } from "next/navigation";
+
+export default async function TracesPage() {
+  const session = await auth();
+  if (!session?.user.isAdmin) redirect("/login");
+  return <BreadcrumbDashboard api="/api/breadcrumb" basePath="/admin/traces" />;
+}
+```
+
+Ingest routes are separate: they're closed unless you set an `ingest.apiKey`,
+and they authenticate with that key rather than `authorize`. The
+[MCP](/docs/mcp/) endpoint works the same way, with its own keys.
+
+`authorize` also decides who can connect a coding agent. MCP keys are minted
+through the API, so it is what stands between a stranger and a key that reads
+your traces.
+
+{/* prettier-ignore */}
+> [!WARNING]
+> If you guard the mount with your own middleware instead of `authorize`, scope
+> it to exclude `/api/ingest/*` and `/api/mcp`. Middleware runs before Breadcrumb
+> sees the request, and neither an exporter nor a coding agent has a browser
+> session to present, so blanket middleware silently breaks both.
+
+## Flush on serverless
+
+On a long-running server, spans export in the background and you don't have to
+do anything. On serverless or edge, the runtime can freeze right after the
+response, dropping any spans still buffered. Two settings prevent that.
+
+Set `flushMode: "sync"` so each span exports as it ends:
+
+```ts
+breadcrumb({ flushMode: "sync" });
+```
+
+And flush before the function returns. Use `waitUntil` so it doesn't block the
+response:
+
+```ts
+import { waitUntil } from "@vercel/functions";
+
+waitUntil(bc.flush());
+```
+
+{/* prettier-ignore */}
+> [!WARNING]
+> Without a flush, the last spans of a serverless invocation can be lost when
+> the runtime freezes. Always call `bc.flush()` (or `waitUntil(bc.flush())`)
+> before returning.
+
+## Set retention
+
+By default, traces are kept for 90 days, and 7 days in development. Override the
+windows per environment. Sweeps are bounded batches that run at most every 15
+minutes and coordinate across instances through the database, so no cron is
+needed.
+
+```ts
+breadcrumb({
+  retention: {
+    default: "90d",
+    environments: { development: "7d" },
+  },
+});
+```
+
+## Guard sensitive payloads
+
+Prompts and outputs are stored as captured. To scrub PII or trim large payloads
+before they're written, use `redact` and `maxPayloadChars`. Both run on every
+span from every path.
+
+```ts
+breadcrumb({
+  redact: (span) => {
+    if (typeof span.input === "string") {
+      span.input = span.input.replace(/sk-\w+/g, "[redacted]");
+    }
+  },
+  maxPayloadChars: 8192,
+});
+```
+
+## Deploy checklist
+
+- Point `database` at Postgres, ideally your existing pool.
+- Run `breadcrumb migrate` in your deploy step.
+- Set `authorize` to protect the API, which also gates who can create MCP keys.
+- Guard the dashboard route with your app's own auth.
+- On serverless, set `flushMode: "sync"` and flush before returning.
+- Set `retention` windows for your environments.
+- Add `redact` or `maxPayloadChars` if traces may contain sensitive data.
+
+## Next steps
+
+- [Configuration](/docs/configuration/): the full option reference.
+- [Dashboard](/docs/dashboard/): mounting the UI at your own route.
+- [Querying your data](/docs/querying/): build your own views.

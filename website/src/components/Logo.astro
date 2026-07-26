@@ -1,0 +1,20 @@
+---
+// The breadcrumb mark, monochrome (currentColor) so it adapts to the header.
+interface Props {
+	class?: string;
+}
+const { class: className } = Astro.props;
+---
+
+<svg
+	class={className}
+	viewBox="0 0 512 512"
+	fill="none"
+	xmlns="http://www.w3.org/2000/svg"
+	aria-hidden="true"
+>
+	<path
+		d="M325.226 94.8526C374.702 87.7319 419 126.122 419 176.121C419 196.895 411.18 216.327 397.892 231.084V332.376C397.697 332.375 397.501 332.373 397.306 332.373C350.352 332.373 312.288 370.447 312.288 417.414C312.288 417.609 312.29 417.805 312.291 418H155.151C133.131 418 115.281 400.144 115.281 378.119V232.359C101.281 217.456 93.0001 197.499 93 176.121C93 126.122 137.298 87.7319 186.774 94.8526L242.639 102.893C251.501 104.168 260.499 104.168 269.361 102.893L325.226 94.8526Z"
+		fill="currentColor"
+	></path>
+</svg>

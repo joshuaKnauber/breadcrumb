@@ -1,0 +1,46 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: Cost & tokens
+description: How Breadcrumb computes cost from token usage, including cache and reasoning tiers.
+---
+
+# Cost & tokens
+
+Breadcrumb tracks token usage on every LLM span and computes cost from **your** price table. It ships no prices of its own — if you don't declare a model's price and don't set a cost yourself, cost stays null rather than being guessed.
+
+## Token types
+
+Usage is normalized to the OpenTelemetry convention: `inputTokens` is always **cache-inclusive**, and the finer tiers are subsets of it.
+
+| Field | Meaning |
+| --- | --- |
+| `inputTokens` | Total prompt tokens, including cached reads and writes. |
+| `outputTokens` | Total completion tokens, including reasoning. |
+| `cachedInputTokens` | Cache-read tokens (a subset of input), billed at a discount. |
+| `cacheWriteTokens` | Cache-creation tokens (a subset of input), billed at a premium. |
+| `reasoningTokens` | Thinking tokens (a subset of output). |
+
+Breadcrumb reconciles the conflicting conventions of the AI SDK (`ai.*`), OpenTelemetry (`gen_ai.*`), and manual spans, so these come out consistent no matter the source.
+
+## Declaring prices
+
+Prices are USD per 1M tokens. `cachedInput` and `cacheWrite` default to the base `input` rate when omitted — so no discount or premium is ever invented.
+
+```ts
+breadcrumb({
+  pricing: {
+    "gpt-5": { input: 1.25, output: 10, cachedInput: 0.125 },
+    "claude-sonnet": { input: 3, output: 15, cacheWrite: 3.75 },
+  },
+});
+```
+
+Keys match as lowercase substrings of the span's model, longest key wins — so `"claude-opus"` beats `"claude"`. Cost is split across non-cached input, cache-read, cache-write, and output tiers, then summed.
+
+## The Cost view
+
+The built-in dashboard's **Cost** tab charts spend per day and model, and breaks it down by function (root-span name) — so you can see which flow is expensive. Everything there is also available programmatically:
+
+```ts
+const summary = await bc.api.costSummary({ days: 14, environment: "production" });
+```

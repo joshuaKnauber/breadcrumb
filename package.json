@@ -1,38 +1,18 @@
 {
-  "name": "breadcrumb",
+  "name": "breadcrumb-monorepo",
   "private": true,
   "workspaces": [
     "packages/*",
-    "services/*",
-    "apps/*",
-    "examples"
+    "examples/*"
   ],
   "scripts": {
-    "build": "turbo run build",
-    "dev": "docker compose -f infra/docker-compose.yml up -d && turbo run dev --filter=@breadcrumb/server --filter=@breadcrumb/web",
-    "dev:packages": "turbo run dev --filter=./packages/*",
-    "db:up": "docker compose -f infra/docker-compose.yml up -d",
-    "db:down": "docker compose -f infra/docker-compose.yml down",
-    "db:reset": "docker compose -f infra/docker-compose.yml down -v && docker compose -f infra/docker-compose.yml up -d",
-    "test": "turbo run test",
-    "typecheck": "turbo run typecheck",
-    "clean": "turbo run clean",
-    "release": "turbo run build --filter=./packages/* && changeset publish"
+    "build": "npm run build --workspace=@breadcrumb-sh/core && npm run build --workspace=@breadcrumb-sh/cli && npm run build --workspace=@breadcrumb-sh/react",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "release": "npm run build && changeset publish"
   },
   "devDependencies": {
-    "@changesets/cli": "^2",
-    "turbo": "^2",
-    "typescript": "^5.7",
-    "vitest": "^4.1.2"
-  },
-  "packageManager": "npm@10.0.0",
-  "engines": {
-    "node": ">=20"
-  },
-  "dependencies": {
-    "@xyflow/react": "^12.10.1"
-  },
-  "overrides": {
-    "rollup": ">=4.59.0"
+    "@changesets/cli": "^2.27.10",
+    "typescript": "^5.7.2"
   }
 }

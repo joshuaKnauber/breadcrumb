@@ -1,0 +1,63 @@
+{
+  "name": "@breadcrumb-sh/react",
+  "version": "0.0.1",
+  "description": "The Breadcrumb tracing dashboard as a React component, plus hooks for building your own.",
+  "license": "MIT",
+  "homepage": "https://breadcrumb.sh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joshuaKnauber/breadcrumb.git",
+    "directory": "packages/react"
+  },
+  "bugs": "https://github.com/joshuaKnauber/breadcrumb/issues",
+  "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./routing": {
+      "types": "./dist/routing.d.mts",
+      "import": "./dist/routing.mjs"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "scripts": {
+    "build": "tsdown && node scripts/build-css.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.6.0",
+    "@breadcrumb-sh/core": "0.0.1",
+    "@phosphor-icons/react": "^2.1.10",
+    "@tanstack/react-query": "^5.62.0",
+    "chart.js": "^4.4.7",
+    "react-chartjs-2": "^5.2.0",
+    "@fontsource/geist-mono": "^5.1.0",
+    "@fontsource/instrument-sans": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "postcss": "^8.4.49",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwindcss": "^4.0.0",
+    "@tailwindcss/postcss": "^4.0.0",
+    "tsdown": "^0.22.11",
+    "typescript": "^5.7.2"
+  }
+}

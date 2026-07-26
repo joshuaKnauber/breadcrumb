@@ -1,0 +1,284 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Surfaces, darkest to lightest. Shared with the dashboard. */
+  --color-canvas: #0e0f10;
+  --color-plate: #151719;
+  --color-panel: #1c1f21;
+  --color-raised: #272a2d;
+
+  /* Hairlines are alpha, so they hold over any surface above. */
+  --color-line: #ffffff12;
+  --color-line-strong: #ffffff1f;
+
+  --color-fg: #e9eaeb;
+  --color-muted: #989ca0;
+  --color-faint: #63676b;
+
+  /* Colour is a measurement. Red is failure, the ramp is share of runtime. */
+  --color-err: #e0736a;
+  --color-err-bg: #e0736a1a;
+  --color-heat-mid: #d9a441;
+  --color-heat-hi: #d4663a;
+  --color-neutral-bar: #5e6367;
+
+  /* Aliases kept so the docs pages keep resolving. */
+  --color-bg: var(--color-canvas);
+  --color-bg-elevated: var(--color-panel);
+  --color-bg-muted: var(--color-plate);
+  --color-surface: var(--color-raised);
+  --color-border: var(--color-line);
+  --color-border-strong: var(--color-line-strong);
+  --color-fg-muted: var(--color-muted);
+  --color-fg-subtle: #7b7f84;
+  --color-fg-faint: var(--color-faint);
+}
+
+:root {
+  color-scheme: dark;
+  isolation: isolate;
+}
+
+html,
+body {
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+}
+
+html {
+  overflow-x: clip;
+  scroll-behavior: smooth;
+}
+
+/* Shiki blocks (astro <Code> + fenced MDX): neutral panel, mono, no theme bg. */
+.astro-code {
+  position: relative;
+  background-color: var(--color-plate) !important;
+  border: 1px solid var(--color-border);
+  padding: 1rem 1.25rem;
+  font-size: 12.5px;
+  line-height: 1.7;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+}
+
+/* Per-snippet copy button, injected by the global script. */
+.copy-code {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  color: var(--color-fg-subtle);
+  background: color-mix(in oklab, var(--color-bg-elevated) 85%, transparent);
+  border: 1px solid var(--color-border);
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+}
+.astro-code:hover .copy-code,
+.copy-code:focus-visible {
+  opacity: 1;
+}
+.copy-code:hover {
+  color: var(--color-fg);
+}
+.copy-code.copied {
+  color: var(--color-fg);
+  opacity: 1;
+}
+
+/* A label that swaps on .copied without the button resizing: both states share
+   one grid cell, so the wider one sets the width. */
+.swap {
+  display: grid;
+  text-align: left;
+}
+.swap > span {
+  grid-area: 1 / 1;
+  transition: opacity 0.12s ease;
+}
+.swap > span:last-child,
+.copied .swap > span:first-child {
+  opacity: 0;
+}
+.copied .swap > span:last-child {
+  opacity: 1;
+}
+
+/* Docs prose. Same scale as the homepage, which is written as a doc too. */
+.docs-content {
+  color: var(--color-muted);
+  font-size: 15px;
+  line-height: 1.75;
+}
+.docs-content > :first-child {
+  margin-top: 0;
+}
+.docs-content h1 {
+  color: var(--color-fg);
+  font-size: 27px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  margin: 0 0 1rem;
+}
+.docs-content h2 {
+  color: var(--color-fg);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin: 54px 0 14px;
+}
+.docs-content h3 {
+  color: var(--color-fg);
+  font-size: 15px;
+  font-weight: 600;
+  margin: 32px 0 8px;
+}
+/* The markdown source shows through, so a heading's level is visible. */
+.docs-content h1::before,
+.docs-content h2::before,
+.docs-content h3::before {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  color: var(--color-faint);
+}
+.docs-content h1::before {
+  content: "# ";
+}
+.docs-content h2::before {
+  content: "## ";
+}
+.docs-content h3::before {
+  content: "### ";
+}
+.docs-content p {
+  margin: 1rem 0;
+}
+.docs-content a {
+  color: var(--color-fg);
+  text-decoration: underline;
+  text-decoration-color: var(--color-border-strong);
+  text-underline-offset: 3px;
+}
+.docs-content a:hover {
+  text-decoration-color: var(--color-fg-muted);
+}
+.docs-content strong {
+  color: var(--color-fg);
+  font-weight: 500;
+}
+.docs-content ul,
+.docs-content ol {
+  margin: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.docs-content ul {
+  padding: 0;
+  list-style: none;
+}
+.docs-content ul > li::before {
+  content: "- ";
+  font-family: var(--font-mono);
+  color: var(--color-faint);
+}
+.docs-content ol {
+  padding-left: 1.25rem;
+  list-style: decimal;
+}
+.docs-content li::marker {
+  color: var(--color-faint);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+.docs-content :not(pre) > code {
+  font-family: var(--font-mono);
+  font-size: 0.84em;
+  color: var(--color-fg);
+}
+.docs-content pre {
+  margin: 1.5rem 0;
+}
+.docs-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+}
+.docs-content th,
+.docs-content td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.5rem 1rem 0.5rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.docs-content th {
+  color: var(--color-fg);
+  font-weight: 500;
+  border-bottom-color: var(--color-border-strong);
+}
+.docs-content hr {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  margin: 2.5rem 0;
+}
+.docs-content blockquote {
+  border-left: 2px solid var(--color-border-strong);
+  padding-left: 1rem;
+  margin: 1.5rem 0;
+  color: var(--color-fg-subtle);
+}
+
+/* GitHub-style callouts (remark-github-blockquote-alert). */
+.docs-content .markdown-alert {
+  margin: 1.5rem 0;
+  padding: 0.85rem 1rem;
+  border-left: 2px solid var(--alert, var(--color-border-strong));
+  background: color-mix(in oklab, var(--alert, #888) 8%, transparent);
+}
+.docs-content .markdown-alert > :first-child {
+  margin-top: 0;
+}
+.docs-content .markdown-alert > :last-child {
+  margin-bottom: 0;
+}
+.docs-content .markdown-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--alert, var(--color-fg-muted));
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  margin-bottom: 0.4rem;
+}
+.docs-content .markdown-alert-title svg {
+  width: 1em;
+  height: 1em;
+  fill: currentColor;
+}
+.docs-content .markdown-alert-note {
+  --alert: #8a93a3;
+}
+.docs-content .markdown-alert-tip {
+  --alert: #6cc58a;
+}
+.docs-content .markdown-alert-important {
+  --alert: var(--color-fg);
+}
+.docs-content .markdown-alert-warning {
+  --alert: var(--color-heat-mid);
+}
+.docs-content .markdown-alert-caution {
+  --alert: var(--color-err);
+}

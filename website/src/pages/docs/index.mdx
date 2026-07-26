@@ -1,0 +1,58 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: Introduction
+description: Breadcrumb is LLM tracing you install as a library. Your database, your deployment, your UI.
+---
+
+# Introduction
+
+Breadcrumb is LLM tracing you install as a library, not a service you send your
+traces to. It runs in your backend, stores spans in a database you already own,
+and renders its dashboard as a component inside your app.
+
+Three reasons to pick it over a hosted platform:
+
+- **Your traces sit next to your data.** They are rows in your database, so
+  nothing leaves your infrastructure and your own queries can join them to your
+  users, tenants, and orders.
+- **The dashboard is a starting point.** It ships as a
+  [React component](/docs/dashboard/) you mount at your own route, so you can
+  add pages to it, and when it stops fitting the way your product works, the
+  same data is there as [React hooks and typed queries](/docs/react/).
+- **Nothing is metered.** No account, no ingest endpoint, no per-event bill, so
+  you can log the whole payload and keep it as long as you want.
+
+## How it works
+
+Create one instance, pointed at your database.
+
+```ts
+import { breadcrumb } from "@breadcrumb-sh/core";
+import { postgres } from "@breadcrumb-sh/core/adapters";
+
+export const bc = breadcrumb({
+  database: postgres(process.env.DATABASE_URL!),
+  basePath: "/api/breadcrumb",
+});
+```
+
+Mount `bc.handler` at that path and your traces are queryable. Render
+`<BreadcrumbDashboard>` at a route of your own, behind your own auth, and you
+can look at them:
+
+```tsx
+<BreadcrumbDashboard api="/api/breadcrumb" basePath="/admin/traces" />
+```
+
+Pass `bc.telemetry()` to the Vercel AI SDK and your model calls start recording
+themselves. Everything else is optional: `bc.trace()` for code the SDK does not
+cover, and `bc.api` for querying traces yourself.
+
+## Next steps
+
+- [Quickstart](/docs/quickstart/): install, mount, and capture a trace.
+- [Frameworks](/docs/frameworks/): mount the handler in Next.js, Hono, or Node.
+- [Dashboard](/docs/dashboard/): mount the UI and add your own pages.
+- [Instrumenting](/docs/instrumenting/): the AI SDK, OpenTelemetry, or manual spans.
+- [Database](/docs/database/): adapters, schema, and migrations.
+- [Production](/docs/production/): auth, retention, and going live.

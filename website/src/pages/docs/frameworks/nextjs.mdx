@@ -1,0 +1,70 @@
+---
+layout: ../../../layouts/DocsLayout.astro
+title: Next.js
+description: Mount Breadcrumb in a Next.js App Router route.
+---
+
+# Next.js
+
+A Next.js setup has two routes: a catch-all route handler for the API, and a
+page for the dashboard.
+
+## The API
+
+Create `app/api/breadcrumb/[...path]/route.ts`, matching the `basePath` you
+passed to `breadcrumb()`:
+
+```ts
+import { toNextHandler } from "@breadcrumb-sh/core/next";
+import { bc } from "@/lib/breadcrumb";
+
+export const { GET, POST, DELETE } = toNextHandler(bc);
+```
+
+`toNextHandler` returns one function per method; export the ones you need.
+`DELETE` is what revoking an [MCP key](/docs/mcp/) uses.
+
+## The dashboard
+
+Create `app/admin/traces/[[...slug]]/page.tsx`:
+
+```tsx
+import { BreadcrumbDashboard } from "@breadcrumb-sh/react";
+
+export default function TracesPage() {
+  return (
+    <div style={{ height: "100dvh" }}>
+      <BreadcrumbDashboard api="/api/breadcrumb" basePath="/admin/traces" />
+    </div>
+  );
+}
+```
+
+Then import the stylesheet once in `app/layout.tsx`:
+
+```tsx
+import "@breadcrumb-sh/react/styles.css";
+```
+
+Two routes rather than one because the App Router will not put a `route.ts` and
+a `page.tsx` on the same segment. The optional catch-all is what gives each
+trace a shareable URL. See [Dashboard](/docs/dashboard/) for props, custom
+pages, and server rendering deep links.
+
+{/* prettier-ignore */}
+> [!TIP]
+> On serverless (including Vercel), flush spans before the function returns so
+> none are lost when the runtime freezes. See [Production](/docs/production/).
+
+If you use `better-sqlite3` in development, add it to `serverExternalPackages`
+in `next.config.ts` so Next leaves the native module alone:
+
+```ts
+export default { serverExternalPackages: ["better-sqlite3"] };
+```
+
+## Next steps
+
+- [Dashboard](/docs/dashboard/): props, custom pages, and theming.
+- [Database & migrations](/docs/database/): choose an adapter.
+- [Instrumenting](/docs/instrumenting/): capture your first trace.

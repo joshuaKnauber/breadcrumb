@@ -1,1 +1,0 @@
-ALTER TABLE "monitor_items" ADD COLUMN "note" text DEFAULT '' NOT NULL;

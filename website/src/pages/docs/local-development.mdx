@@ -1,0 +1,53 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: Local development
+description: Run Breadcrumb locally with SQLite, no database server and no migration commands.
+---
+
+# Local development
+
+Locally, you want tracing with zero infrastructure. The simplest setup uses the
+SQLite adapter with a file — no database server, no migration commands.
+
+## Embedded in your app
+
+Point `database` at a SQLite file in development. The schema is created on first
+use, so there is nothing to run before starting your app.
+
+```ts
+import { sqlite, postgres } from "@breadcrumb-sh/core/adapters";
+
+export const bc = breadcrumb({
+  database: process.env.DATABASE_URL
+    ? postgres(process.env.DATABASE_URL)
+    : sqlite(".breadcrumb/dev.db"),
+  basePath: "/api/breadcrumb",
+});
+```
+
+{/* prettier-ignore */}
+> [!TIP]
+> Add `.breadcrumb/` to your `.gitignore`. SQLite writes sidecar files
+> (`-wal`, `-shm`) next to the database that you don't want to commit.
+
+Run your app and open the route you mounted the
+[dashboard](/docs/dashboard/) at. There is no separate dev server: the dashboard
+is a component in your app, so it runs under your dev server with your hot
+reload, the same code you ship.
+
+Only the database swaps between local and deployed. The mount, the auth, and the
+dashboard route stay identical, so there's no setup that exists only in
+development and can rot without you noticing.
+
+## Debugging with your agent
+
+Open the **MCP** tab in the dashboard and create a key to let your coding agent
+query these traces while you work. A local instance names itself
+`breadcrumb-local`, so you can keep it connected alongside a deployed one
+without the two colliding. See [MCP](/docs/mcp/).
+
+## Next steps
+
+- [Instrumenting](/docs/instrumenting/): send traces from your code.
+- [MCP](/docs/mcp/): let your coding agent read the traces you just captured.
+- [Production](/docs/production/): move from SQLite to Postgres and deploy.

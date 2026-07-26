@@ -1,0 +1,80 @@
+---
+import "../styles/global.css";
+
+interface Props {
+	title?: string;
+	description?: string;
+}
+
+const {
+	title = "Breadcrumb — LLM tracing you own, end to end",
+	description = "Breadcrumb is embeddable LLM tracing for TypeScript apps. It drops into your backend, stores traces in your own Postgres, and gives you a dashboard you mount in your app. Your database, your deployment, your UI.",
+} = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, Astro.site).href;
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="generator" content={Astro.generator} />
+
+		<title>{title}</title>
+		<meta name="description" content={description} />
+		<link rel="canonical" href={canonical} />
+		<meta name="theme-color" content="#0e0f10" />
+		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content="breadcrumb" />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:url" content={canonical} />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content={title} />
+		<meta name="twitter:description" content={description} />
+
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			rel="stylesheet"
+			href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&display=swap"
+		/>
+		<link
+			rel="stylesheet"
+			type="text/css"
+			href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.1/src/regular/style.css"
+		/>
+		<script defer data-domain="breadcrumb.sh" src="https://nudge-events.up.railway.app/js/script.js"></script>
+	</head>
+	<body>
+		<slot />
+	</body>
+</html>
+
+<script>
+	// Add a copy button to every code block (fenced MDX + <Code> snippets).
+	for (const pre of document.querySelectorAll<HTMLElement>("pre.astro-code")) {
+		if (pre.querySelector(".copy-code")) continue;
+		const btn = document.createElement("button");
+		btn.type = "button";
+		btn.className = "copy-code";
+		btn.setAttribute("aria-label", "Copy code");
+		btn.innerHTML = '<i class="ph ph-copy"></i>';
+		btn.addEventListener("click", async () => {
+			const code = pre.querySelector("code")?.textContent ?? pre.textContent ?? "";
+			try {
+				await navigator.clipboard.writeText(code.replace(/\n$/, ""));
+				btn.innerHTML = '<i class="ph ph-check"></i>';
+				btn.classList.add("copied");
+				setTimeout(() => {
+					btn.innerHTML = '<i class="ph ph-copy"></i>';
+					btn.classList.remove("copied");
+				}, 1500);
+			} catch {}
+		});
+		pre.appendChild(btn);
+	}
+</script>
+

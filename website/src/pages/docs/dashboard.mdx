@@ -1,0 +1,200 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: Dashboard
+description: Mount the Breadcrumb dashboard as a React component in your own app, with your routing, auth, and theme.
+---
+
+# Dashboard
+
+The dashboard is a React component you render inside your app, not a page
+Breadcrumb serves for you. It lives at a route you own, behind the auth you
+already have, styled to match the app around it.
+
+```bash
+npm i @breadcrumb-sh/react
+```
+
+`react >=18` and `react-dom >=18` are peer dependencies. Everything else ships
+with the package.
+
+## Two routes
+
+A working setup has two mounts: the handler answering data requests, and the
+component rendering them.
+
+```ts
+// app/api/breadcrumb/[...path]/route.ts — the API
+import { toNextHandler } from "@breadcrumb-sh/core/next";
+import { bc } from "@/lib/breadcrumb";
+
+export const { GET, POST, DELETE } = toNextHandler(bc);
+```
+
+```tsx
+// app/admin/traces/[[...slug]]/page.tsx — the page
+import { BreadcrumbDashboard } from "@breadcrumb-sh/react";
+
+export default function TracesPage() {
+  return (
+    <div style={{ height: "100dvh" }}>
+      <BreadcrumbDashboard api="/api/breadcrumb" basePath="/admin/traces" />
+    </div>
+  );
+}
+```
+
+Import the stylesheet once, anywhere above the dashboard:
+
+```tsx
+// app/layout.tsx
+import "@breadcrumb-sh/react/styles.css";
+```
+
+`api` must match the `basePath` you passed to `breadcrumb()`. They are two
+different paths on purpose: the App Router will not put a route handler and a
+page on the same segment, and separating them means your page route is guarded
+by your app's own auth while the API is guarded by `authorize`.
+
+{/* prettier-ignore */}
+> [!TIP]
+> The component fills its container, so give it one with a height. A bare
+> `<BreadcrumbDashboard />` inside an auto-height parent collapses to nothing.
+
+The optional catch-all (`[[...slug]]`) is what gives individual traces real,
+shareable URLs. Without it the dashboard still works, it just keeps the route in
+component state instead of the address bar.
+
+## Props
+
+| Prop | Description |
+| --- | --- |
+| `api` | Where the handler is mounted, matching your `basePath`. |
+| `basePath` | Where this page is mounted. Turns on address-bar sync; needs a catch-all route. |
+| `initialRoute` | The route to render before the address bar is read. See [Server rendering](#server-rendering). |
+| `route` / `onNavigate` | Controlled routing: you own the route and map it to your own router. |
+| `hide` | Pages and chrome to leave out: any page name plus `sidebar`, `theme`. |
+| `pages` | Extra pages, listed in the sidebar after the built-in ones. |
+| `theme` | `light`, `dark`, or `system` to follow your app; omit for a built-in toggle. |
+| `client` | A preconfigured `BreadcrumbClient`, for custom `fetch` or auth headers. |
+| `queryClient` | Reuse an existing `QueryClient` instead of the dashboard's own. |
+| `className` | Applied to the dashboard root. |
+
+## Routing
+
+Three modes, in order of how much you want to care.
+
+**Component state.** Pass neither `basePath` nor `route` and navigation stays
+internal. Your URL never changes, which is what you want for a dashboard inside
+a modal or a tab.
+
+**Address bar.** Pass `basePath` and the dashboard reads and writes the URL, so
+every trace is linkable and the back button works.
+
+**Controlled.** Pass `route` and `onNavigate` and you own it entirely, which is
+how you drive it from your own router.
+
+```tsx
+<BreadcrumbDashboard
+  api="/api/breadcrumb"
+  route={route}
+  onNavigate={(next, opts) => router[opts?.replace ? "replace" : "push"](routePath(next))}
+/>
+```
+
+### Server rendering
+
+The dashboard reads the address bar after mount, so a deep link renders the
+session list for one frame before correcting itself. Pass `initialRoute` to
+close that gap:
+
+```tsx
+import { BreadcrumbDashboard } from "@breadcrumb-sh/react";
+import { parseRoute } from "@breadcrumb-sh/react/routing";
+
+export default async function TracesPage({ params }) {
+  const { slug } = await params;
+  return (
+    <div style={{ height: "100dvh" }}>
+      <BreadcrumbDashboard
+        api="/api/breadcrumb"
+        basePath="/admin/traces"
+        initialRoute={parseRoute(`/${(slug ?? []).join("/")}`)}
+      />
+    </div>
+  );
+}
+```
+
+`parseRoute` lives on its own entry point because the main one is marked
+`"use client"`, and a server component cannot call into a client module.
+
+## Adding pages
+
+A custom page gets a sidebar entry, a URL, and the same data access the built-in
+pages have:
+
+```tsx
+<BreadcrumbDashboard
+  api="/api/breadcrumb"
+  basePath="/admin/traces"
+  hide={["cost"]}
+  pages={[{ name: "evals", label: "Evals", element: <Evals /> }]}
+/>
+```
+
+```tsx
+"use client";
+import { useSessions } from "@breadcrumb-sh/react";
+
+export function Evals() {
+  const { data } = useSessions();
+  const failing = (data?.items ?? []).filter((s) => s.errorCount > 0);
+  // …render it however your product looks.
+}
+```
+
+`element` is an element rather than a render function, because a server
+component can pass an element across the boundary to a client component but not
+a function. Your page renders inside the dashboard's style scope, so its design
+tokens (`bg-panel`, `text-faint`, `border-line`) are available to you, and the
+[hooks](/docs/react/) work without any extra provider.
+
+Use `hide` to drop what doesn't apply. It takes built-in page names
+(`sessions`, `cost`, `mcp`), your own page names, and the chrome keys `sidebar`
+and `theme` — so `hide={["sidebar"]}` with `route`/`onNavigate` lets you supply
+your own navigation entirely.
+
+## Styling
+
+Every rule in the stylesheet is scoped under `.bc-root`, so the dashboard cannot
+restyle your app and your utility classes cannot collide with its. Tailwind's
+Preflight is deliberately excluded, since it resets `*` and `body`.
+
+Colors are CSS custom properties on the dashboard root, so overriding them is
+plain CSS:
+
+```css
+.bc-root {
+  --color-panel: #fff;
+  --color-err: #b91c1c;
+}
+```
+
+Dark mode follows the OS unless the built-in toggle sets it or you pass `theme`.
+The attribute is stamped on the dashboard's own root, never on `<html>`, so
+passing `theme` is how you keep it in step with your app's theme switcher.
+
+## Without React
+
+The dashboard component is React-only. If your frontend is something else, the
+data is still fully available: query it server-side with
+[`bc.api`](/docs/querying/), over HTTP with the
+[typed client](/docs/react/#typed-client), and render it with the
+[headless kit](/docs/react/#headless-kit), which is what the shipped waterfall
+is built on.
+
+## Next steps
+
+- [React & client](/docs/react/): the hooks, client, and kit behind the component.
+- [Production](/docs/production/): guarding the page and the API.
+- [MCP](/docs/mcp/): create a key from the dashboard's MCP tab.

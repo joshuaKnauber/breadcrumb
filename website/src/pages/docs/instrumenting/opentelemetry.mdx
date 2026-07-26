@@ -1,0 +1,47 @@
+---
+layout: ../../../layouts/DocsLayout.astro
+title: OpenTelemetry
+description: Ingest traces over HTTP from other services with OTLP or plain JSON.
+---
+
+# OpenTelemetry
+
+For services outside your main process, Breadcrumb accepts traces over HTTP.
+Enable the ingest endpoints with an API key, then point any OTLP/HTTP exporter at
+your mount path.
+
+```ts
+breadcrumb({
+  // …
+  ingest: { apiKey: process.env.BREADCRUMB_KEY },
+});
+```
+
+Point the exporter at `basePath/api/ingest/otel` and send the key as a header:
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=https://yourapp.com/api/breadcrumb/api/ingest/otel \
+OTEL_EXPORTER_OTLP_HEADERS="x-breadcrumb-key=$BREADCRUMB_KEY"
+```
+
+## Sending spans as JSON
+
+There's also a plain JSON endpoint at `basePath/api/ingest/spans` for sending
+span records directly, without an OpenTelemetry SDK:
+
+```bash
+curl -X POST https://yourapp.com/api/breadcrumb/api/ingest/spans \
+  -H "x-breadcrumb-key: $BREADCRUMB_KEY" \
+  -H "content-type: application/json" \
+  -d '{ "spans": [{ "traceId": "abc", "name": "external-call", "kind": "llm" }] }'
+```
+
+{/* prettier-ignore */}
+> [!NOTE]
+> Ingest routes authenticate with the API key and sit outside your dashboard
+> `authorize` guard. They stay closed until you set `ingest.apiKey`.
+
+## Next steps
+
+- [Production](/docs/production/): secure your keys and set retention.
+- [Cost & tokens](/docs/cost/): price the traces you ingest.

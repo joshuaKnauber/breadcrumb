@@ -1,0 +1,82 @@
+{
+  "name": "@breadcrumb-sh/core",
+  "version": "0.0.1",
+  "description": "Embeddable LLM tracing for TypeScript apps. Your database, your deployment, your UI.",
+  "license": "MIT",
+  "homepage": "https://breadcrumb.sh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joshuaKnauber/breadcrumb.git",
+    "directory": "packages/core"
+  },
+  "bugs": "https://github.com/joshuaKnauber/breadcrumb/issues",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./adapters": {
+      "types": "./dist/adapters/index.d.mts",
+      "import": "./dist/adapters/index.mjs"
+    },
+    "./kit": {
+      "types": "./dist/kit/index.d.mts",
+      "import": "./dist/kit/index.mjs"
+    },
+    "./client": {
+      "types": "./dist/client.d.mts",
+      "import": "./dist/client.mjs"
+    },
+    "./node": {
+      "types": "./dist/node.d.mts",
+      "import": "./dist/node.mjs"
+    },
+    "./next": {
+      "types": "./dist/next.d.mts",
+      "import": "./dist/next.mjs"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "better-sqlite3": ">=11",
+    "pg": ">=8"
+  },
+  "peerDependenciesMeta": {
+    "better-sqlite3": {
+      "optional": true
+    },
+    "pg": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.2",
+    "better-sqlite3": "^11.7.0",
+    "tsdown": "^0.22.11",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/context-async-hooks": "^2.9.0",
+    "@opentelemetry/core": "^2.9.0",
+    "@opentelemetry/sdk-trace-base": "^2.9.0",
+    "@valv/core": "^0.10.0",
+    "@valv/mcp-sdk": "^0.6.1",
+    "@valv/postgres": "^0.5.0",
+    "@valv/sqlite": "^0.1.0"
+  }
+}

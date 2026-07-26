@@ -1,9 +1,0 @@
-{
-  "title": "Guide",
-  "collapsible": false,
-  "pages": [
-    "index",
-    "quick-start",
-    "monitoring"
-  ]
-}

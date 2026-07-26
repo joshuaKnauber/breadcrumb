@@ -1,0 +1,58 @@
+---
+layout: ../../../layouts/DocsLayout.astro
+title: Other frameworks
+description: Mount Breadcrumb in any fetch-native framework — SvelteKit, Bun, Astro, Cloudflare Workers.
+---
+
+# Other frameworks
+
+Any framework that gives you a web `Request` works directly: call
+`bc.handler(request)` and return its `Response`. No adapter needed.
+
+## SvelteKit
+
+Add a catch-all endpoint at `src/routes/api/breadcrumb/[...path]/+server.ts`:
+
+```ts
+import { bc } from "$lib/breadcrumb";
+
+export const GET = ({ request }) => bc.handler(request);
+export const POST = ({ request }) => bc.handler(request);
+```
+
+## Bun and Elysia
+
+Bun's `serve` and Elysia both work with the web `Request` directly:
+
+```ts
+Bun.serve({
+  fetch(request) {
+    const url = new URL(request.url);
+    if (url.pathname.startsWith("/api/breadcrumb")) return bc.handler(request);
+    // …the rest of your app
+    return new Response("Not found", { status: 404 });
+  },
+});
+```
+
+## Astro and Cloudflare Workers
+
+The same one-liner applies. In an Astro endpoint or a Worker's `fetch`, forward
+the request to `bc.handler(request)`.
+
+If your framework isn't listed here, look for where it exposes the standard
+`Request` object — that's all Breadcrumb needs.
+
+## Viewing the traces
+
+Each snippet above mounts the API. The [dashboard](/docs/dashboard/) is a React
+component, so render it wherever your app renders React, pointed at
+`api="/api/breadcrumb"`. If there's no React in your stack, query the data
+directly with [`bc.api`](/docs/querying/) and render it yourself, optionally
+with the [headless kit](/docs/react/#headless-kit).
+
+## Next steps
+
+- [Dashboard](/docs/dashboard/): mount the UI.
+- [Database & migrations](/docs/database/): choose an adapter.
+- [Instrumenting](/docs/instrumenting/): capture your first trace.
