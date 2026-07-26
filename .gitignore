@@ -1,5 +1,6 @@
 node_modules/
 dist/
+.next/
 .turbo/
 .claude/
 *.tsbuildinfo
@@ -26,7 +27,7 @@ Thumbs.db
 *.log
 npm-debug.log*
 
-# Local trace databases (the playground's, and whatever `breadcrumb dev` creates).
-# SQLite in WAL mode churns the -wal sidecar on every run, so tracking these
-# means anyone who runs the example gets binary noise in git status.
+# Local trace databases, e.g. the playground's. SQLite in WAL mode churns the
+# -wal sidecar on every run, so tracking these means anyone who runs the example
+# gets binary noise in git status.
 .breadcrumb/
