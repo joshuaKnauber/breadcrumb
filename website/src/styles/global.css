@@ -58,7 +58,6 @@ html {
   position: relative;
   background-color: var(--color-plate) !important;
   border: 1px solid var(--color-border);
-  border-radius: 8px;
   padding: 1rem 1.25rem;
   font-size: 12.5px;
   line-height: 1.7;
@@ -76,7 +75,6 @@ html {
   justify-content: center;
   width: 1.75rem;
   height: 1.75rem;
-  border-radius: 4px;
   color: var(--color-fg-subtle);
   background: color-mix(in oklab, var(--color-bg-elevated) 85%, transparent);
   border: 1px solid var(--color-border);
@@ -244,7 +242,6 @@ html {
   margin: 1.5rem 0;
   padding: 0.85rem 1rem;
   border-left: 2px solid var(--alert, var(--color-border-strong));
-  border-radius: 4px;
   background: color-mix(in oklab, var(--alert, #888) 8%, transparent);
 }
 .docs-content .markdown-alert > :first-child {
