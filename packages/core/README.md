@@ -30,26 +30,27 @@ import { postgres } from "@breadcrumb-sh/core/adapters";
 
 export const bc = breadcrumb({
   database: postgres(process.env.DATABASE_URL!),
-  basePath: "/admin/traces",
+  basePath: "/api/breadcrumb",
   authorize: (req) => isAdmin(req),
   pricing: { "gpt-5": { input: 1.25, output: 10, cachedInput: 0.125 } },
 });
 ```
 
 Mount `bc.handler` (a `(request: Request) => Promise<Response>`) at `basePath`.
-Framework bridges are provided:
+It serves the JSON API, not a UI — the dashboard is a separate route rendering
+[`<BreadcrumbDashboard>`](../react). Framework bridges are provided:
 
 ```ts
-// Next.js: app/admin/traces/[[...breadcrumb]]/route.ts
+// Next.js: app/api/breadcrumb/[...path]/route.ts
 import { toNextHandler } from "@breadcrumb-sh/core/next";
-export const { GET, POST } = toNextHandler(bc);
+export const { GET, POST, DELETE } = toNextHandler(bc);
 
 // Node / Express
 import { toNodeHandler } from "@breadcrumb-sh/core/node";
-app.use("/admin/traces", toNodeHandler(bc));
+app.use("/api/breadcrumb", toNodeHandler(bc));
 
 // Anything fetch-native (Hono, SvelteKit, …)
-app.all("/admin/traces/*", (c) => bc.handler(c.req.raw));
+app.all("/api/breadcrumb/*", (c) => bc.handler(c.req.raw));
 ```
 
 The schema is created automatically in development (`migrations: "auto"`). For
@@ -135,9 +136,9 @@ Key `breadcrumb()` options:
 | Option | Default | Purpose |
 | --- | --- | --- |
 | `database` | required | A `sqlite()` or `postgres()` adapter. |
-| `basePath` | `/breadcrumb` | Where the handler is mounted. |
+| `basePath` | `/breadcrumb` | Where the handler is mounted, and what the dashboard's `api` prop points at. |
 | `environment` | `VERCEL_ENV ?? NODE_ENV ?? development` | Stamped on every span. |
-| `authorize` | none | Guards the UI and query routes. |
+| `authorize` | none | Guards the query routes. Your dashboard page is yours to guard. |
 | `ingest` | none | `{ apiKey }` enables HTTP ingest endpoints. |
 | `pricing` | none | USD per 1M tokens, keyed by model, for cost. |
 | `retention` | 90d | Per-environment retention windows. |
