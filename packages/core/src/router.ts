@@ -2,7 +2,6 @@ import type { DatabaseAdapter, ListOptions, SpanRecord, TraceFilter } from "./db
 import { clampLimit, pageOf } from "./db/rows.js";
 import { normalizeSpanData } from "./otel/normalize.js";
 import { parseOtlpJson } from "./otel/otlp.js";
-import { renderApp } from "./ui.js";
 import { readBearerToken, type McpKeyStore } from "./mcp/keys.js";
 import { resolveMcpServerName, type McpOptions } from "./mcp/config.js";
 
@@ -259,13 +258,6 @@ export function createHandler(ctx: RouterContext): (request: Request) => Promise
         const spans = await ctx.adapter.getTraceSpans(decodeURIComponent(traceMatch[1]!));
         if (spans.length === 0) return json({ error: "not found" }, 404);
         return json({ spans });
-      }
-      // SPA fallback: any non-API GET serves the app, so client-side routes
-      // (/cost, /failures) survive a hard refresh / deep link.
-      if (!path.startsWith("/api/")) {
-        return new Response(renderApp(basePath || "/"), {
-          headers: { "content-type": "text/html; charset=utf-8" },
-        });
       }
     }
 

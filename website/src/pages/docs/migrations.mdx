@@ -13,7 +13,7 @@ changes are additive-only and idempotent, so they're always safe to run.
 
 ## What migrations create
 
-Breadcrumb creates two prefixed tables, so they don't collide with your own
+Breadcrumb creates three prefixed tables, so they don't collide with your own
 schema:
 
 - `breadcrumb_spans` — one row per span. This holds everything in the dashboard:
@@ -23,6 +23,9 @@ schema:
   timestamps. Traces and sessions are derived from these rows at query time.
 - `breadcrumb_meta` — a small key/value table used to coordinate retention
   sweeps across instances.
+- `breadcrumb_mcp_keys` — the keys that let a coding agent read your traces over
+  [MCP](/docs/mcp/). Only a SHA-256 hash of each key is stored, never the key
+  itself.
 
 The column list lives in one place in the library and drives every adapter's
 data definition language (DDL).
@@ -115,6 +118,10 @@ CREATE TABLE IF NOT EXISTS breadcrumb_spans (id TEXT PRIMARY KEY, …);
 CREATE INDEX IF NOT EXISTS breadcrumb_spans_trace_id ON breadcrumb_spans (trace_id);
 
 CREATE TABLE IF NOT EXISTS breadcrumb_meta (key TEXT PRIMARY KEY, value BIGINT NOT NULL);
+
+CREATE TABLE IF NOT EXISTS breadcrumb_mcp_keys (id TEXT PRIMARY KEY, name TEXT NOT NULL, key_hash TEXT NOT NULL, key_prefix TEXT NOT NULL, created_at BIGINT NOT NULL, last_used_at BIGINT);
+
+CREATE UNIQUE INDEX IF NOT EXISTS breadcrumb_mcp_keys_hash ON breadcrumb_mcp_keys (key_hash);
 ```
 
 Commit the file and apply it however you run migrations — `psql`, Flyway, Atlas,
@@ -150,6 +157,7 @@ Migrations don't use version numbers or a chain of migration files. Each run
 3. If it does, add any columns that are missing.
 4. Create each index that doesn't exist.
 5. Create `breadcrumb_meta` if it's missing.
+6. Create `breadcrumb_mcp_keys` and its unique index if they're missing.
 
 `migrate` executes those statements; `generate` writes the same statements to a
 file. Because the plan is a diff, both are idempotent — a second run is a no-op.

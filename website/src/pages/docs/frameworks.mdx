@@ -41,7 +41,7 @@ export const bc = breadcrumb({
 
 The dashboard and query routes are unauthenticated by default. Guard them with
 the `authorize` option — it runs on every dashboard and query request, but not
-on ingest routes, which use an API key instead:
+on the routes that carry their own key:
 
 ```ts
 breadcrumb({
@@ -49,5 +49,18 @@ breadcrumb({
 });
 ```
 
-You can also wrap the mount in your framework's own auth middleware. See
-[Production](/docs/production/) for the full checklist.
+You can wrap the mount in your framework's own auth middleware instead, but
+scope it. Two route families authenticate themselves, because their callers have
+no browser session to present:
+
+| Route | Authenticates with |
+| --- | --- |
+| `/api/ingest/*` | your `ingest.apiKey` |
+| `/api/mcp` | an [MCP key](/docs/mcp/) |
+
+Middleware over the whole mount runs before Breadcrumb sees the request, so it
+turns away your trace exporters and your coding agent along with everyone else.
+Exclude those two paths, or use `authorize`, which Breadcrumb applies only after
+the self-authenticating routes have had their turn.
+
+See [Production](/docs/production/) for the full checklist.

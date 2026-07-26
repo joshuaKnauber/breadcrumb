@@ -6,7 +6,7 @@
     "examples/*"
   ],
   "scripts": {
-    "build": "npm run build --workspace=@breadcrumb-sh/ui && npm run build --workspace=@breadcrumb-sh/core && npm run build --workspace=@breadcrumb-sh/cli && npm run build --workspace=@breadcrumb-sh/react",
+    "build": "npm run build --workspace=@breadcrumb-sh/core && npm run build --workspace=@breadcrumb-sh/cli && npm run build --workspace=@breadcrumb-sh/react",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "release": "npm run build && changeset publish"

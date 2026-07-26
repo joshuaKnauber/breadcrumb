@@ -3,12 +3,15 @@ import type { Breadcrumb } from "./index.js";
 type Handler = (request: Request) => Promise<Response>;
 
 /**
- * Next.js catch-all route handlers. In
- * app/admin/traces/[[...breadcrumb]]/route.ts:
+ * Next.js catch-all route handlers. In app/api/breadcrumb/[...path]/route.ts:
  *
  *   export const { GET, POST, DELETE } = toNextHandler(bc);
  *
- * Gate the UI with the `authorize` option on breadcrumb() or with middleware.
+ * This is the API half of a mount; the dashboard half is a page rendering
+ * <BreadcrumbDashboard>, on its own path because the App Router will not put a
+ * route handler and a page on the same segment.
+ *
+ * Gate it with the `authorize` option on breadcrumb() or with middleware.
  */
 export function toNextHandler(input: Breadcrumb | Handler): {
   GET: Handler;

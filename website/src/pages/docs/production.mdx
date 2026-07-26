@@ -61,7 +61,19 @@ breadcrumb({
 ```
 
 Ingest routes are separate: they're closed unless you set an `ingest.apiKey`,
-and they authenticate with that key rather than `authorize`.
+and they authenticate with that key rather than `authorize`. The
+[MCP](/docs/mcp/) endpoint works the same way, with its own keys.
+
+This also decides who can connect a coding agent. MCP keys are minted from the
+dashboard, so `authorize` is what stands between a stranger and a key that reads
+your traces.
+
+{/* prettier-ignore */}
+> [!WARNING]
+> If you guard the mount with your own middleware instead of `authorize`, scope
+> it to exclude `/api/ingest/*` and `/api/mcp`. Middleware runs before Breadcrumb
+> sees the request, and neither an exporter nor a coding agent has a browser
+> session to present, so blanket middleware silently breaks both.
 
 ## Flush on serverless
 
@@ -127,7 +139,7 @@ breadcrumb({
 
 - Point `database` at Postgres, ideally your existing pool.
 - Run `breadcrumb migrate` in your deploy step.
-- Set `authorize` to protect the dashboard.
+- Set `authorize` to protect the dashboard, which also gates who can create MCP keys.
 - On serverless, set `flushMode: "sync"` and flush before returning.
 - Set `retention` windows for your environments.
 - Add `redact` or `maxPayloadChars` if traces may contain sensitive data.

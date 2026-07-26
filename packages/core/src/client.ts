@@ -1,7 +1,8 @@
 /**
  * @breadcrumb-sh/core/client — a typed, framework-agnostic fetch client for the
- * handler's JSON API. Mirrors `bc.api` so a browser/SPA custom UI gets the same
- * calls without wiring fetch by hand. Build hooks or components on top.
+ * handler's JSON API. Mirrors `bc.api` so a browser UI gets the same calls
+ * without wiring fetch by hand. `@breadcrumb-sh/react` is built on it; build
+ * your own hooks or components on top the same way.
  */
 import type {
   CostSummary,
@@ -37,9 +38,10 @@ export type {
 
 export interface BreadcrumbClientOptions {
   /**
-   * Where the handler is mounted, e.g. "/admin/traces". Requests go to
-   * `${basePath}/api/...`. Omit to use relative URLs (`api/...`), which resolve
-   * against a page's <base href> — the mode the baked-in dashboard uses.
+   * Where the handler is mounted, e.g. "/api/breadcrumb". Requests go to
+   * `${basePath}/api/...`. Omit only when the handler answers relative to the
+   * page doing the asking, since relative URLs resolve against the current
+   * document.
    */
   basePath?: string;
   /** Override fetch (SSR, custom auth). Defaults to the global `fetch`. */
@@ -49,6 +51,8 @@ export interface BreadcrumbClientOptions {
 }
 
 export interface BreadcrumbClient {
+  /** Where the handler is mounted, as given. Empty means relative URLs. */
+  readonly basePath: string;
   listTraces(options?: ListOptions): Promise<Page<TraceSummary>>;
   listSessions(options?: ListOptions): Promise<Page<SessionSummary>>;
   listRuns(sessionKey: string): Promise<RunSummary[]>;
@@ -65,7 +69,7 @@ export interface BreadcrumbClient {
 }
 
 function joinUrl(basePath: string, path: string): string {
-  // No basePath → relative, resolved against the page's <base href>.
+  // No basePath → relative, resolved against the current document URL.
   return basePath ? `${basePath.replace(/\/$/, "")}/${path}` : path;
 }
 
@@ -109,6 +113,7 @@ export function createBreadcrumbClient(options: BreadcrumbClientOptions = {}): B
   }
 
   return {
+    basePath,
     listTraces: (opts) => get<Page<TraceSummary>>(`api/traces${listQuery(opts)}`),
     listSessions: (opts) => get<Page<SessionSummary>>(`api/sessions${listQuery(opts)}`),
     listRuns: (sessionKey) =>

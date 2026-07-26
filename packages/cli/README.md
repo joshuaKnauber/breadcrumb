@@ -1,7 +1,7 @@
 # @breadcrumb-sh/cli
 
-CLI for [Breadcrumb](https://breadcrumb.sh): a standalone local dev server and
-database migrations. Installs the `breadcrumb` command.
+CLI for [Breadcrumb](https://breadcrumb.sh): database migrations for the
+Breadcrumb schema. Installs the `breadcrumb` command.
 
 ```bash
 npm i -D @breadcrumb-sh/cli
@@ -10,28 +10,6 @@ npx breadcrumb <command>
 ```
 
 ## Commands
-
-### `breadcrumb dev`
-
-Boots a standalone local tracing server backed by SQLite, with the dashboard and
-ingest endpoint. Unauthenticated by design, for local use only.
-
-```bash
-breadcrumb dev [--port 4106] [--db .breadcrumb/dev.db]
-```
-
-| Flag | Default | Description |
-| --- | --- | --- |
-| `--port` | `4106` | Port to listen on. |
-| `--db` | `.breadcrumb/dev.db` | SQLite file (created if missing). |
-
-Point external services at the ingest endpoint with the dev API key `dev`:
-
-```
-▸ breadcrumb dev server → http://localhost:4106
-▸ ingest (key: "dev")   → http://localhost:4106/api/ingest/spans
-▸ storage               → .breadcrumb/dev.db
-```
 
 ### `breadcrumb migrate`
 

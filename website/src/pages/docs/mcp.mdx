@@ -1,0 +1,132 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: MCP for coding agents
+description: Let Claude Code, Codex, or any MCP client query your traces to debug your app.
+---
+
+# MCP for coding agents
+
+Your traces already live in your database. This connects your coding agent to
+them, so instead of pasting a stack trace into a chat you can ask "which model
+is burning the budget" or "what failed in the last hour" and have the agent
+query the data itself.
+
+Breadcrumb serves this over MCP at `basePath + /api/mcp`, mounted in your app
+alongside the dashboard. There is no extra service to run and no database
+credentials to hand out.
+
+{/* prettier-ignore */}
+> [!TIP]
+> The engine behind this works on the rest of your database too, not just
+> traces. [valv](https://valv.sh/library) is open source: point it at your own
+> tables, write policies as TypeScript functions, and hand the tools to your
+> agent. It is deny-all by default, so the model can't read a column you hid or
+> a row outside the caller's scope.
+
+## Connect an agent
+
+Open the **MCP** tab in your dashboard and create a key. The full key is shown
+once, on the row you just created, along with a copy-paste command for Claude
+Code, Codex, and a generic JSON config.
+
+```bash
+claude mcp add --transport http breadcrumb https://yourapp.com/breadcrumb/api/mcp \
+  --header "Authorization: Bearer bcmcp_…"
+```
+
+That's the whole setup. Ask your agent something:
+
+> Group error spans from the last day by model and show the total cost.
+
+## What the agent can do
+
+It gets four tools over a single resource, the `breadcrumb_spans` table:
+
+| Tool | What it does |
+| --- | --- |
+| `list_resources` | Lists what's queryable. |
+| `search_resources` | Finds a resource by keyword. |
+| `describe_resource` | Returns columns, types, and what each one means. |
+| `query` | Runs a structured, validated query. |
+
+The agent never writes SQL. It sends a structured query that is validated
+against the schema and compiled to SQL by [valv](https://valv.sh/library),
+which is also where the access rules are enforced. Columns carry descriptions,
+so the agent knows that `start_time` is epoch milliseconds and that a `NULL`
+cost means no price is configured rather than free.
+
+## What it cannot do
+
+This is the part worth understanding before you hand out a key.
+
+- **Read-only.** No inserts, updates, or deletes. There is no write path.
+- **One table.** The schema declares exactly one resource. Every other table in
+  your database is unreachable by construction, including
+  `breadcrumb_mcp_keys` — an agent cannot read the hashes of the keys that
+  authenticate it.
+- **Bounded.** Queries are capped at 1000 rows, so a careless request can't pull
+  your whole span table.
+
+Keys are stored as SHA-256 hashes. A database leak yields nothing replayable,
+and the raw key is unrecoverable after creation. Revoking one from the dashboard
+takes effect immediately.
+
+{/* prettier-ignore */}
+> [!NOTE]
+> Minting a key is guarded by your `authorize` function, the same one that
+> guards the dashboard. Anyone who can already read traces in the browser can
+> create a key that reads the same data. If your dashboard is open, so is this.
+
+## Local and production
+
+Connect both. They are separate MCP servers with separate keys, so your agent
+can debug against local traces and production traces in the same session.
+
+Because MCP clients key servers by name, the two would collide. A Breadcrumb
+reached over a loopback address calls itself `breadcrumb-local`; anywhere else it
+is `breadcrumb`. The dashboard's snippets always use the right one.
+
+Running a third, like staging, needs an explicit name:
+
+```ts
+export const bc = breadcrumb({
+  database: postgres(process.env.DATABASE_URL),
+  mcp: { name: "breadcrumb-staging" },
+});
+```
+
+## Hiding payloads
+
+Spans capture `input` and `output`, which hold raw prompts and completions. If
+that content shouldn't reach an agent:
+
+```ts
+export const bc = breadcrumb({
+  database: postgres(process.env.DATABASE_URL),
+  mcp: { hidePayloads: true },
+});
+```
+
+Timings, tokens, cost, model, status, and errors stay queryable, so an agent can
+still diagnose a failing run without reading user content. For scrubbing content
+everywhere rather than just here, use
+[`redact`](/docs/configuration/) instead — it runs before storage, so the data
+never lands in your database at all.
+
+## Options
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `name` | `string` | What clients register this server as. Defaults to `"breadcrumb-local"` over loopback, `"breadcrumb"` otherwise. |
+| `hidePayloads` | `boolean` | Hides the `input` and `output` columns from the agent. Default `false`. |
+
+The endpoint is always mounted; `mcp` only tunes it. It stays unreachable until
+someone creates a key.
+
+## Next steps
+
+- [Configuration](/docs/configuration/): every `breadcrumb()` option.
+- [Production](/docs/production/): locking down the dashboard, which also
+  controls who can mint a key.
+- [Migrations](/docs/migrations/): the `breadcrumb_mcp_keys` table keys are
+  stored in.

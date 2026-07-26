@@ -1,7 +1,7 @@
 {
   "name": "@breadcrumb-sh/cli",
   "version": "0.0.1",
-  "description": "CLI for breadcrumb — local dev server and migrations.",
+  "description": "CLI for breadcrumb — schema migrations.",
   "license": "MIT",
   "homepage": "https://breadcrumb.sh",
   "repository": {

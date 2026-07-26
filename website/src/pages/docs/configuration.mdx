@@ -39,6 +39,7 @@ const bc = breadcrumb({
 | `maxPayloadChars` | `number` | Caps captured input/output size. Default `16384`; `0` disables. |
 | `flushMode` | `"batch" \| "sync"` | `"batch"` (default) buffers and exports every ~2s. `"sync"` exports each span as it ends — for serverless/edge. |
 | `migrations` | `"auto" \| "manual"` | `"auto"` (default) creates the schema on first use. `"manual"` never runs DDL at runtime — you apply migrations yourself. See [Migrations](/docs/migrations/). |
+| `mcp` | `{ name?, hidePayloads? }` | Tunes the MCP endpoint your coding agent connects to. Always mounted; unreachable until someone creates a key. See [MCP](/docs/mcp/). |
 
 ## Pricing
 

@@ -1,0 +1,225 @@
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/*
+ * Preflight is deliberately absent. It resets `*`, `html` and `body`, which in
+ * an embedded component means resetting the host application. The scoped reset
+ * further down does the same job for the dashboard's subtree only.
+ *
+ * The build then rewrites every selector in this file to sit under `.bc-root`,
+ * so nothing here can reach outside the dashboard and the host's own utility
+ * classes can never collide with ours.
+ */
+@source "./dashboard";
+
+/*
+ * Structure comes from surface layers (canvas → plate → panel → raised), not
+ * borders; `line` is a hairline reserved for pane splits. Neutrals carry a
+ * whisper of cool so they read as chosen rather than inherited.
+ *
+ * Chrome is hueless. Color is a measurement: `err` only ever means failure, and
+ * the heat ramp (`heat-mid` → `heat-hi`) only ever means share of runtime. If a
+ * pixel is tinted, it is carrying information.
+ */
+@theme {
+  --color-canvas: #eef0f1;
+  --color-plate: #f8f9fa;
+  --color-panel: #ffffff;
+  --color-raised: #e6e9eb;
+  --color-line: #00000014;
+  --color-line-strong: #00000024;
+  --color-fg: #15181a;
+  --color-muted: #5a6065;
+  --color-faint: #8b9198;
+  --color-err: #c2453a;
+  --color-heat-hi: #b0491f;
+  --color-heat-mid: #9a7414;
+  --color-bar: #a8aeb3;
+  --color-hover: #00000008;
+  --color-sel: #00000010;
+  --font-sans: "Instrument Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/*
+ * Tailwind v4 resolves @theme vars once, so the dark palette is applied by
+ * redefining the same custom properties. `data-theme` is stamped on the
+ * dashboard root by the theme toggle and must win over the OS preference in
+ * both directions; its absence means "follow the OS", handled here so a system
+ * user never sees the wrong palette before hydration.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-canvas: #0e0f10;
+    --color-plate: #151719;
+    --color-panel: #1c1f21;
+    --color-raised: #272a2d;
+    --color-line: #ffffff12;
+    --color-line-strong: #ffffff1f;
+    --color-fg: #e9eaeb;
+    --color-muted: #989ca0;
+    --color-faint: #63676b;
+    --color-err: #e0736a;
+    --color-heat-hi: #d4663a;
+    --color-heat-mid: #d9a441;
+    --color-bar: #5e6367;
+    --color-hover: #ffffff08;
+    --color-sel: #ffffff12;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-canvas: #0e0f10;
+  --color-plate: #151719;
+  --color-panel: #1c1f21;
+  --color-raised: #272a2d;
+  --color-line: #ffffff12;
+  --color-line-strong: #ffffff1f;
+  --color-fg: #e9eaeb;
+  --color-muted: #989ca0;
+  --color-faint: #63676b;
+  --color-err: #e0736a;
+  --color-heat-hi: #d4663a;
+  --color-heat-mid: #d9a441;
+  --color-bar: #5e6367;
+  --color-hover: #ffffff08;
+  --color-sel: #ffffff12;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+/*
+ * The scoped reset: what Preflight would have given us, for the dashboard's
+ * subtree only. `border-style: solid` and `border-width: 0` in particular are
+ * load-bearing — Tailwind's `border` utility sets width alone and assumes them.
+ */
+:root {
+  box-sizing: border-box;
+  display: block;
+  height: 100%;
+  background: var(--color-canvas);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-align: left;
+}
+
+:root *,
+:root *::before,
+:root *::after {
+  box-sizing: border-box;
+  border: 0 solid var(--color-line);
+  margin: 0;
+  padding: 0;
+}
+
+:root h1,
+:root h2,
+:root h3,
+:root h4 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+:root a {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+:root ol,
+:root ul {
+  list-style: none;
+}
+
+:root button,
+:root input,
+:root select,
+:root textarea {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  background: transparent;
+  border-radius: 0;
+}
+
+:root button {
+  cursor: pointer;
+  text-align: left;
+  appearance: button;
+}
+
+:root input::placeholder,
+:root textarea::placeholder {
+  opacity: 1;
+}
+
+:root svg,
+:root img {
+  display: block;
+  max-width: 100%;
+}
+
+:root code,
+:root pre {
+  font-family: var(--font-mono);
+}
+
+:root :focus-visible {
+  outline: 2px solid var(--color-fg);
+  outline-offset: -2px;
+  border-radius: 3px;
+}
+
+/*
+ * Loading placeholders breathe rather than shimmer: a sweeping highlight needs a
+ * gradient, and gradients are the one thing the hueless palette can't afford.
+ */
+@keyframes bc-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+:root .bc-skeleton {
+  animation: bc-breathe 1.5s ease-in-out infinite;
+}
+
+:root ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+:root ::-webkit-scrollbar-thumb {
+  background: var(--color-raised);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+:root ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root *,
+  :root *::before,
+  :root *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+  /* A frozen mid-cycle frame would leave placeholders arbitrarily dimmed. */
+  :root .bc-skeleton {
+    animation: none !important;
+    opacity: 0.8;
+  }
+}

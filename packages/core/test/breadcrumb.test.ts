@@ -140,14 +140,14 @@ describe("handler", () => {
   const get = (bc: ReturnType<typeof makeBc>, path: string) =>
     bc.handler(new Request(`http://localhost${path}`));
 
-  it("serves the UI shell and trace queries under the base path", async () => {
+  it("serves trace queries under the base path and nothing else", async () => {
     const bc = makeBc();
     await bc.trace("t", async () => "x");
     await bc.flush();
 
-    const html = await get(bc, "/admin/traces");
-    expect(html.status).toBe(200);
-    expect(await html.text()).toContain('<base href="/admin/traces/"');
+    // The handler is an API only — the dashboard is a React component the user
+    // mounts themselves, so non-API paths are not ours to answer.
+    expect((await get(bc, "/admin/traces")).status).toBe(404);
 
     const res = await get(bc, "/admin/traces/api/traces");
     expect(res.status).toBe(200);

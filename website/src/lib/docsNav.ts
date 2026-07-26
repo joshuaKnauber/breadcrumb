@@ -54,6 +54,10 @@ export const docsNav: DocsGroup[] = [
 		],
 	},
 	{
+		group: "Coding agents",
+		items: [{ label: "MCP", href: "/docs/mcp/" }],
+	},
+	{
 		group: "Build your own UI",
 		items: [
 			{ label: "Querying your data", href: "/docs/querying/" },

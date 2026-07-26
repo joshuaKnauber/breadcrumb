@@ -1,9 +1,13 @@
 # playground
 
 A runnable, offline demo of the Breadcrumb server SDK
-([`@breadcrumb-sh/core`](../../packages/core)). It mounts the dashboard at
+([`@breadcrumb-sh/core`](../../packages/core)). It mounts the handler at
 `/admin/traces` and exposes endpoints that produce traces, using a mock AI SDK
 model so it runs with no API key.
+
+This app produces traces but does not render them. To look at them, run
+[`examples/next`](../next) alongside it, which mounts the dashboard over the
+same database.
 
 ## Run
 
@@ -13,11 +17,8 @@ From the monorepo root:
 npm run dev --workspace=examples/playground
 ```
 
-Then open:
-
-- <http://localhost:4200> for the playground, with "run pipeline" and "run
-  failing pipeline" buttons.
-- <http://localhost:4200/admin/traces> for the dashboard.
+Then open <http://localhost:4200>, with "run pipeline" and "run failing
+pipeline" buttons.
 
 Traces are stored in a SQLite file at `.breadcrumb/playground.db`, created on
 startup.

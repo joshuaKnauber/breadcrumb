@@ -3,10 +3,12 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": [],
     "baseUrl": ".",
     "paths": {
-      "@breadcrumb-sh/core/client": ["../core/src/client.ts"]
+      "@breadcrumb-sh/core/client": ["../core/src/client.ts"],
+      "@breadcrumb-sh/core/kit": ["../core/src/kit/index.ts"]
     }
   },
   "include": ["src"]

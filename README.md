@@ -3,25 +3,22 @@
 **See every step your AI takes.**
 
 Breadcrumb is LLM tracing that lives in your backend. Traces land in your own
-Postgres or SQLite, and a dashboard you serve from your own app. No platform,
-nothing leaving your stack.
+Postgres or SQLite, and the dashboard is a React component you mount inside your
+own app. No platform, nothing leaving your stack.
 
 ```
-Your app          Breadcrumb        Your database      Your dashboard
-emits spans   →   normalizes    →   stores traces  →   serves the UI
+Your app          Breadcrumb        Your database      Your app
+emits spans   →   normalizes    →   stores traces  →   renders the UI
 ```
-
-Your app emits spans, Breadcrumb normalizes and writes them to your database,
-and the dashboard is served from your app. Every step stays inside your own
-infrastructure.
 
 ## Install
 
 ```bash
-npm i @breadcrumb-sh/core pg          # or better-sqlite3 for SQLite
+npm i @breadcrumb-sh/core pg                  # or better-sqlite3 for SQLite
+npm i @breadcrumb-sh/react                    # the dashboard component
 ```
 
-Create one instance, point it at your database, and mount its handler:
+Create one instance and point it at your database:
 
 ```ts
 // lib/breadcrumb.ts
@@ -30,18 +27,38 @@ import { postgres } from "@breadcrumb-sh/core/adapters";
 
 export const bc = breadcrumb({
   database: postgres(process.env.DATABASE_URL!),
-  basePath: "/admin/traces",
+  basePath: "/api/breadcrumb",
   authorize: (req) => isAdmin(req),
 });
 ```
 
+Mounting takes two routes: one for the API, one for the dashboard.
+
 ```ts
-// app/admin/traces/[[...breadcrumb]]/route.ts  (Next.js)
+// app/api/breadcrumb/[...path]/route.ts
 import { toNextHandler } from "@breadcrumb-sh/core/next";
 import { bc } from "@/lib/breadcrumb";
 
-export const { GET, POST } = toNextHandler(bc);
+export const { GET, POST, DELETE } = toNextHandler(bc);
 ```
+
+```tsx
+// app/traces/[[...slug]]/page.tsx
+import { BreadcrumbDashboard } from "@breadcrumb-sh/react";
+
+export default function TracesPage() {
+  return <BreadcrumbDashboard api="/api/breadcrumb" basePath="/traces" />;
+}
+```
+
+```tsx
+// app/layout.tsx
+import "@breadcrumb-sh/react/styles.css";
+```
+
+They are two routes because the Next App Router will not put a route handler and
+a page on the same segment. The catch-all is what lets individual traces have
+real, shareable URLs.
 
 Then instrument your LLM calls, with the Vercel AI SDK or the manual `trace()`
 API:
@@ -60,13 +77,13 @@ Full walkthrough at [breadcrumb.sh/docs/quickstart](https://breadcrumb.sh/docs/q
 
 | Package | Description |
 | --- | --- |
-| [`@breadcrumb-sh/core`](packages/core) | Server SDK: tracing, the mountable handler, adapters, typed client, headless kit, and the baked-in dashboard. |
-| [`@breadcrumb-sh/cli`](packages/cli) | `breadcrumb` CLI: a standalone local dev server and schema migrations. |
-| [`@breadcrumb-sh/react`](packages/react) | React hooks for building a custom dashboard over your own data. |
-| [`@breadcrumb-sh/ui`](packages/ui) | Private. The dashboard SPA, built and baked into `core`. |
+| [`@breadcrumb-sh/core`](packages/core) | Server SDK: tracing, the mountable handler, adapters, typed client, and the headless kit. |
+| [`@breadcrumb-sh/react`](packages/react) | The dashboard component, plus the hooks it is built on. |
+| [`@breadcrumb-sh/cli`](packages/cli) | `breadcrumb` CLI: schema migrations. |
 
-The [`examples/playground`](examples/playground) app is a runnable, offline
-demo of the server SDK.
+Two runnable examples: [`examples/playground`](examples/playground) is an
+offline demo of the server SDK that produces traces, and
+[`examples/next`](examples/next) mounts the dashboard over them.
 
 ## Repo layout
 
@@ -74,25 +91,33 @@ This is an npm-workspaces monorepo (`packages/*`, `examples/*`).
 
 ```bash
 npm install          # install all workspaces
-npm run build        # build ui → core → cli → react (in order)
+npm run build        # core → cli → react
 npm run typecheck
 npm run test
 ```
 
-`ui` builds first because its output is baked into `core` at build time.
+To see the dashboard while working on it, run both examples: the playground
+writes traces to SQLite, the Next app reads them.
+
+```bash
+npm run dev --workspace=examples/playground   # :4200, click to emit traces
+npm run dev --workspace=examples/next         # :4300/traces
+```
+
+The Next example imports the *built* `@breadcrumb-sh/react`, so rebuild the
+package to see changes. That is deliberate: bundling bugs (dropped side effects,
+missing `"use client"`) only exist in the build.
 
 ## Releasing
 
 Versioning and publishing run on [changesets](https://github.com/changesets/changesets).
-Add a changeset for any user-facing change to `core`, `cli`, or `react`:
+Add a changeset for any user-facing change to `core`, `react`, or `cli`:
 
 ```bash
 npx changeset
 ```
 
-The private `ui` and `playground` packages are ignored by changesets. Because
-`ui` is baked into `core` at build time (not a package dependency), changes to
-the dashboard should carry a changeset for `@breadcrumb-sh/core`.
+The example apps are ignored by changesets.
 
 ## License
 

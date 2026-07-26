@@ -24,6 +24,10 @@ app.use("/admin/traces", toNodeHandler(bc));
 ```
 
 Put your own auth middleware before this line, or use the `authorize` option.
+Middleware here covers the whole mount, including `/api/ingest/*` and
+`/api/mcp`, which authenticate with their own keys rather than a session — so
+either exclude those paths or reach for `authorize` instead. See
+[Protecting the dashboard](/docs/frameworks/#protecting-the-dashboard).
 
 ## Raw node:http
 

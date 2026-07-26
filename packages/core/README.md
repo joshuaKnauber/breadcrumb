@@ -4,9 +4,10 @@ Embeddable LLM tracing for TypeScript apps. Your database, your deployment, your
 
 Breadcrumb captures your LLM calls (tokens, model, cost, cached and reasoning
 tokens), nests spans into traces, and writes them to your own SQLite or
-Postgres. You mount a fetch-native handler into your app, and get a baked-in
-dashboard plus a headless API to build your own. Built on OpenTelemetry, with
-native support for the Vercel AI SDK.
+Postgres. You mount a fetch-native handler into your app and render the
+dashboard from [`@breadcrumb-sh/react`](../react), or build your own UI on the
+headless API here. Built on OpenTelemetry, with native support for the Vercel
+AI SDK.
 
 ## Install
 
@@ -101,27 +102,31 @@ those runtimes.
 | `@breadcrumb-sh/core` | `breadcrumb()`, the `Breadcrumb` type, migration helpers (`planMigration`, `renderMigrationSql`, `EMPTY_SCHEMA_STATE`), and the full domain type contract. |
 | `@breadcrumb-sh/core/adapters` | `sqlite(fileOrDb)`, `postgres(connectionOrClient)`. |
 | `@breadcrumb-sh/core/client` | `createBreadcrumbClient()`, a typed browser fetch client mirroring `bc.api`. |
-| `@breadcrumb-sh/core/kit` | Headless UI helpers: `flowRows`, `selfTime`, `hotspots`, `asMessages`, `preview`, and formatters (`fmtCost`, `fmtTokens`, `fmtMs`, …). |
+| `@breadcrumb-sh/core/kit` | Headless UI helpers: `traceModel`, `flowRows`, `selfTime`, `hotspots`, `asMessages`, `preview`, and formatters (`fmtCost`, `fmtTokens`, `fmtMs`, …). |
 | `@breadcrumb-sh/core/node` | `toNodeHandler()` for Node/Express. |
 | `@breadcrumb-sh/core/next` | `toNextHandler()` for the Next.js App Router. |
 
 ## Building your own dashboard
 
-The server, browser client, and React hooks share one contract. Query the
-server directly from a React Server Component with `bc.api` (`listTraces`,
+The server, the browser client, and the React hooks share one contract. Query
+the server directly from a React Server Component with `bc.api` (`listTraces`,
 `listSessions`, `getTrace`, `stats`, `costSummary`, …), use the typed client in
 the browser, or reach for [`@breadcrumb-sh/react`](../react) hooks. Render with
 the headless kit:
 
 ```ts
-import { flowRows, selfTime, hotspots, asMessages, fmtCost } from "@breadcrumb-sh/core/kit";
+import { traceModel, selfTime, asMessages, fmtCost } from "@breadcrumb-sh/core/kit";
 
-const rows = flowRows(spans);         // denoised, depth-indexed rows
-const { errorId, slowestId } = hotspots(spans);
-selfTime(span, children);             // extent minus what the children covered
-const chat = asMessages(span.input);  // parse chat-shaped payloads
+const model = traceModel(spans);      // rows, scales, hotspots, totals
+model.rows;                            // denoised, depth-indexed, ready to map
+model.spots;                           // { errorId, slowestId, costliestId }
+selfTime(span, children);              // extent minus what the children covered
+const chat = asMessages(span.input);   // parse chat-shaped payloads
 fmtCost(0.0042);                       // "$0.0042"
 ```
+
+`traceModel` is what the shipped waterfall renders from, so a UI you build from
+scratch reads exactly the same numbers rather than reimplementing them.
 
 ## Configuration
 

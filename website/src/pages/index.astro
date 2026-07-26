@@ -35,12 +35,6 @@ const axis = "0" + " ".repeat(BARS - 6) + "4.81s";
 const flow = `your app    ──▶  breadcrumb  ──▶  your database     ──▶  your dashboard
 bc.trace()       normalize        breadcrumb_spans       bc.handler`;
 
-const surface = `bc
-├─ handler        dashboard + JSON API, mounted at basePath
-├─ telemetry()    plugs into the AI SDK's experimental_telemetry
-├─ trace()        everything else, by hand
-└─ api            typed, server-side queries over your traces`;
-
 // Stack-agnostic version of the quickstart prompt: the assistant works the
 // stack out of the codebase instead of us asking for it up front.
 const SITE = "https://breadcrumb.sh";
@@ -53,6 +47,7 @@ Docs:
 - Database & adapters: ${SITE}/docs/database/
 - Instrumenting: ${SITE}/docs/instrumenting/
 - Custom UI (client, React hooks, kit): ${SITE}/docs/react/
+- MCP for coding agents: ${SITE}/docs/mcp/
 - Production: ${SITE}/docs/production/
 
 Read those, then set it up:
@@ -61,6 +56,7 @@ Read those, then set it up:
 3. Create one shared bc instance with the matching adapter and a basePath.
 4. Mount bc.handler at that path, behind an authorize check.
 5. Instrument my existing LLM calls and confirm a trace lands.
+6. Open the dashboard's MCP tab, create a key, and connect yourself to it, so you can query these traces directly when I ask you to debug something.
 
 Good to know:
 - The schema is created automatically in development. For production, generate migration files with "npx breadcrumb generate", commit them, and set migrations: "manual".
@@ -72,6 +68,7 @@ import { postgres } from "@breadcrumb-sh/core/adapters";
 export const bc = breadcrumb({
   database: postgres(process.env.DATABASE_URL!),
   basePath: "/admin/traces",
+  mcp: { hidePayloads: true }, // your agent reads traces, not prompts
 });`;
 
 // A panel nobody ships for you: your queue, your verdict, your buttons.
@@ -164,11 +161,20 @@ const usage = `await bc.trace("support-reply", async (t) => {
 
 			<h2>Setup</h2>
 			<Code lang="ts" code={instance} theme={CODE_THEME} />
-			<p class="note">
-				Tables are prefixed and additive, and the CLI generates the migration files you commit. If
-				you have used Better Auth, the shape is familiar.
-			</p>
-			<div class="ascii tree">{surface}</div>
+			<ol class="steps">
+				<li>
+					<strong>Integrate in your stack.</strong> One instance, pointed at the database you already
+					run, mounted in your app behind your own auth.
+				</li>
+				<li>
+					<strong>Instrument.</strong> Pass <code>bc.telemetry()</code> to the AI SDK, and wrap everything
+					around it in <code>bc.trace()</code>.
+				</li>
+				<li>
+					<strong>View and debug with MCP.</strong> Read the dashboard yourself, or hand your coding
+					agent a key and let it query the traces.
+				</li>
+			</ol>
 
 			<h2>Instrumenting a request</h2>
 			<p>
@@ -332,6 +338,31 @@ const usage = `await bc.trace("support-reply", async (t) => {
 		content: "- ";
 		font-family: var(--font-mono);
 		color: var(--color-faint);
+	}
+
+	.steps {
+		counter-reset: step;
+		margin: 14px 0;
+		padding: 0;
+		list-style: none;
+		display: flex;
+		flex-direction: column;
+		gap: 7px;
+		max-width: 68ch;
+		margin-top: 20px;
+	}
+	.steps li {
+		counter-increment: step;
+	}
+	/* Numbered, but in the same faint mono gutter the bullet lists use. */
+	.steps li::before {
+		content: counter(step) ". ";
+		font-family: var(--font-mono);
+		color: var(--color-faint);
+	}
+	.steps strong {
+		font-weight: 500;
+		color: var(--color-fg);
 	}
 
 	.actions {

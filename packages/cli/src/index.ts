@@ -1,10 +1,8 @@
 #!/usr/bin/env node
-import { createServer } from "node:http";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import {
-  breadcrumb,
   planMigration,
   renderMigrationSql,
   EMPTY_SCHEMA_STATE,
@@ -12,14 +10,10 @@ import {
   type DatabaseAdapter,
 } from "@breadcrumb-sh/core";
 import { postgres, sqlite } from "@breadcrumb-sh/core/adapters";
-import { toNodeHandler } from "@breadcrumb-sh/core/node";
 
 const [command, ...rest] = process.argv.slice(2);
 
 switch (command) {
-  case "dev":
-    await dev(rest);
-    break;
   case "migrate":
     await migrate(rest);
     break;
@@ -30,7 +24,6 @@ switch (command) {
     console.log(`breadcrumb — embeddable LLM tracing
 
 Usage:
-  breadcrumb dev [--port 4106] [--db .breadcrumb/dev.db]   Standalone local server (SQLite + UI)
   breadcrumb migrate [--database <url|path>]               Apply schema directly to your DB
                                                            (defaults to $DATABASE_URL)
   breadcrumb generate [--database <url|path>]              Write a .sql migration file to review + apply
@@ -116,31 +109,3 @@ async function generate(args: string[]) {
   for (const column of plan.addedColumns) console.log(`  add column ${column}`);
 }
 
-async function dev(args: string[]) {
-  const { values } = parseArgs({
-    args,
-    options: {
-      port: { type: "string", default: "4106" },
-      db: { type: "string", default: ".breadcrumb/dev.db" },
-    },
-  });
-  const port = Number(values.port);
-  const dbPath = resolve(values.db!);
-  mkdirSync(dirname(dbPath), { recursive: true });
-
-  const bc = breadcrumb({
-    database: sqlite(dbPath),
-    basePath: "/",
-    environment: "development",
-    // standalone dev server is local + unauthenticated by design
-    ingest: { apiKey: "dev" },
-  });
-
-  const server = createServer(toNodeHandler(bc));
-  server.listen(port, () => {
-    console.log(`▸ breadcrumb dev server → http://localhost:${port}`);
-    console.log(`▸ ingest (key: "dev")   → http://localhost:${port}/api/ingest/spans`);
-    console.log(`▸ storage               → ${dbPath}`);
-    console.log(`▸ mcp for your agent    → http://localhost:${port}/mcp (create a key there)`);
-  });
-}
