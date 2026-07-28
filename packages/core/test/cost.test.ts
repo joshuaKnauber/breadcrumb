@@ -310,6 +310,24 @@ describe.each(adapters)("costSummary ($label)", ({ make }) => {
     expect(distinctDays.size).toBeGreaterThanOrEqual(2);
   });
 
+  it("attributes cost to the caller's functionId, not the root span's name", async () => {
+    const adapter = make();
+    await adapter.migrate();
+    await adapter.insertSpans([
+      // A trace rooted in another tracer's span, running two named functions.
+      span({ id: "r", traceId: "f1", name: "POST /api/chat", startTime: now - 300 }),
+      span({ traceId: "f1", parentSpanId: "r", name: "ai.streamText.doStream", functionId: "answer",
+        kind: "llm", model: "gpt-5", cost: 0.03, inputTokens: 1000, outputTokens: 100, startTime: now - 250 }),
+      span({ traceId: "f1", parentSpanId: "r", name: "ai.generateText.doGenerate", functionId: "title",
+        kind: "llm", model: "gpt-5", cost: 0.01, inputTokens: 200, outputTokens: 20, startTime: now - 200 }),
+    ]);
+
+    const summary = await adapter.costSummary({ days: 14 });
+    expect(summary.byFunction.map((f) => f.key)).toEqual(["answer", "title"]);
+    expect(summary.byFunction[0]!.cost).toBeCloseTo(0.03);
+    expect(summary.byFunction[0]!.count).toBe(1); // one run, counted per trace
+  });
+
   it("filters by window and environment", async () => {
     const adapter = make();
     await seed(adapter);

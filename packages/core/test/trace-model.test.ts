@@ -80,6 +80,20 @@ describe("traceModel", () => {
     expect(model.total).toBe(1);
   });
 
+  it("renders every subtree when the span above them never arrived", () => {
+    // Two AI SDK calls under a parent breadcrumb never received: both are roots.
+    const forest = [
+      span({ id: "answer", parentSpanId: "elsewhere", name: "answer", startTime: 0, endTime: 100 }),
+      span({ id: "answer-llm", parentSpanId: "answer", name: "ai.streamText.doStream", kind: "llm",
+        startTime: 5, endTime: 80, cost: 0.01 }),
+      span({ id: "title", parentSpanId: "elsewhere", name: "title", startTime: 120, endTime: 200 }),
+    ];
+    const model = traceModel(forest);
+    expect(model.roots.map((s) => s.id)).toEqual(["answer", "title"]);
+    expect(model.order).toEqual(["answer", "answer-llm", "title"]);
+    expect(model.total).toBe(200); // the whole run, not just the first subtree
+  });
+
   it("indexes children by parent, ignoring parents outside the set", () => {
     const model = traceModel(trace);
     expect(model.childrenById.get("st1")?.map((s) => s.id)).toEqual(["ds1"]);

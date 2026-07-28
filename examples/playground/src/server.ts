@@ -102,7 +102,7 @@ async function runPipeline(opts: { fail?: boolean } = {}): Promise<string> {
         prompt: `Beantworte mit Kontext aus: ${docs.join(", ")}`,
         experimental_telemetry: bc.telemetry({
           functionId: "generate-answer",
-          metadata: { userId },
+          userId,
         }),
       });
       const text = await result.text;

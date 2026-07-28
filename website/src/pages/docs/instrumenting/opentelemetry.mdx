@@ -41,6 +41,15 @@ curl -X POST https://yourapp.com/api/breadcrumb/api/ingest/spans \
 > Ingest routes authenticate with the API key and sit outside your dashboard
 > `authorize` guard. They stay closed until you set `ingest.apiKey`.
 
+## Partial traces
+
+A trace can reach Breadcrumb without the span at its top: another tracer owns
+that one, it was sampled away, or the service holding it never exports here.
+Those runs still read correctly — the earliest surviving span names the run, and
+every disconnected subtree is rendered rather than the first one only. Naming and
+cost attribution follow the call's `functionId`, not its position in the tree, so
+a call keeps its identity under someone else's root span.
+
 ## Next steps
 
 - [Production](/docs/production/): secure your keys and set retention.

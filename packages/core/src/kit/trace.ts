@@ -1,5 +1,5 @@
 import type { SpanRecord } from "../db/types.js";
-import { flowRows, fullRows, hotspots, selfTime, type Hotspots } from "./tree.js";
+import { flowRows, fullRows, hotspots, rootSpans, selfTime, traceExtent, type Hotspots } from "./tree.js";
 
 /**
  * Everything the waterfall needs to render that isn't markup: the flattened
@@ -26,8 +26,11 @@ export interface TraceTotals {
 }
 
 export interface TraceModel {
+  /** The run's first root. A trace whose parent spans never arrived can have
+   * several — `roots` holds them all, and every one is rendered. */
   root: SpanRecord | null;
-  /** The root's extent, floored at 1 so it is always safe to divide by. */
+  roots: SpanRecord[];
+  /** The run's extent, floored at 1 so it is always safe to divide by. */
   total: number;
   /** Biggest self time below the root — the scale heat is measured against. */
   maxSelf: number;
@@ -60,14 +63,16 @@ export function traceModel(
   }
   const kidsOf = (id: string): SpanRecord[] => childrenById.get(id) ?? [];
 
-  const root = spans.find((s) => !s.parentSpanId) ?? spans[0] ?? null;
-  const total = root ? extent(root) || 1 : 1;
+  const roots = rootSpans(spans);
+  const root = roots[0] ?? null;
+  const total = spans.length > 0 ? traceExtent(spans) : 1;
   const spots = spans.length > 0 ? hotspots(spans) : null;
 
-  // The root spans the whole run, so including it would flatten every bar.
+  // A root spans its whole subtree, so including one would flatten every bar.
+  const rootIds = new Set(roots.map((s) => s.id));
   let maxSelf = 0;
   for (const s of spans) {
-    if (!s.parentSpanId) continue;
+    if (rootIds.has(s.id)) continue;
     maxSelf = Math.max(maxSelf, selfTime(s, kidsOf(s.id)));
   }
 
@@ -106,6 +111,7 @@ export function traceModel(
 
   return {
     root,
+    roots,
     total,
     maxSelf,
     rows,

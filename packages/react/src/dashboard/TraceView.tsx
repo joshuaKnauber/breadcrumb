@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Tooltip } from "@base-ui/react/tooltip";
-import { CaretDown, CaretRight, XCircle } from "@phosphor-icons/react";
+import { CaretDown, CaretRight, XCircle } from "./ui/icons.js";
 import type { SpanRecord } from "@breadcrumb-sh/core/client";
 import {
   defaultSelection,
@@ -96,14 +96,14 @@ export function TraceView() {
         <RouteLink to={{ page: "sessions", env: route.env }} className="text-muted hover:text-fg">
           Sessions
         </RouteLink>
-        <CaretRight size={10} weight="bold" aria-hidden />
+        <CaretRight size={10} aria-hidden />
         <RouteLink
           to={sessionKey ? { page: "session", sessionKey, env: route.env } : { page: "sessions", env: route.env }}
           className="max-w-[220px] truncate text-muted hover:text-fg"
         >
           {sessionKey ?? "session"}
         </RouteLink>
-        <CaretRight size={10} weight="bold" aria-hidden />
+        <CaretRight size={10} aria-hidden />
         <span className="truncate font-medium text-fg">{displayName(root)}</span>
       </div>
 
@@ -216,7 +216,7 @@ function VerdictRail({
       chips.push({
         key: "e",
         tone: "text-err",
-        lead: <XCircle size={12} weight="fill" />,
+        lead: <XCircle size={12} />,
         label: `${displayName(s)} failed`,
         id: s.id,
       });
@@ -301,9 +301,9 @@ function TraceSkeleton() {
     <Loading label="Loading trace" className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex items-center gap-1.5 border-b border-line px-4 py-2.5">
         <Skeleton w={54} h={11} />
-        <CaretRight size={10} weight="bold" className="text-faint" aria-hidden />
+        <CaretRight size={10} className="text-faint" aria-hidden />
         <Skeleton w={92} h={11} />
-        <CaretRight size={10} weight="bold" className="text-faint" aria-hidden />
+        <CaretRight size={10} className="text-faint" aria-hidden />
         <Skeleton w={76} h={11} />
       </div>
 
@@ -460,7 +460,7 @@ function SpanRow({
             {displayName(span)}
           </span>
           {span.status === "error" && (
-            <XCircle size={12} weight="fill" className="flex-none text-err" aria-label="failed" />
+            <XCircle size={12} className="flex-none text-err" aria-label="failed" />
           )}
         </span>
 
@@ -534,7 +534,7 @@ function MinorRow({
       className="flex w-full items-center gap-1.5 rounded-[5px] px-1.5 py-[3px] text-[11.5px] text-faint hover:bg-hover hover:text-muted"
       style={{ paddingLeft: row.depth * 15 + 6 }}
     >
-      {open ? <CaretDown size={9} weight="bold" /> : <CaretRight size={9} weight="bold" />}
+      {open ? <CaretDown size={9} /> : <CaretRight size={9} />}
       {row.spans.length} {row.spans.length === 1 ? "minor step" : "minor steps"} · {names}
     </button>
   );

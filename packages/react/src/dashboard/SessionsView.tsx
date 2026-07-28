@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { ArrowRight, CaretRight, MagnifyingGlass, XCircle } from "@phosphor-icons/react";
+import { ArrowRight, CaretRight, MagnifyingGlass, XCircle } from "./ui/icons.js";
 import type { RunSummary, SessionSummary } from "@breadcrumb-sh/core/client";
 import { fmtCost, fmtMs, fmtTime, fmtTokens, preview } from "@breadcrumb-sh/core/kit";
 import { useRuns, useSessions } from "../hooks.js";
@@ -153,7 +153,7 @@ function SessionRow({ session: s, onOpen }: { session: SessionSummary; onOpen: (
         </span>
         {failed && (
           <span className="flex min-w-0 items-center gap-1 font-mono text-[11px] text-err">
-            <XCircle size={12} weight="fill" className="flex-none" />
+            <XCircle size={12} className="flex-none" />
             <span className="truncate">{s.failName ?? "error"}</span>
           </span>
         )}
@@ -194,7 +194,7 @@ export function SessionDetail() {
         <RouteLink to={{ page: "sessions", env: route.env }} className="text-muted hover:text-fg">
           Sessions
         </RouteLink>
-        <CaretRight size={10} weight="bold" aria-hidden />
+        <CaretRight size={10} aria-hidden />
         <span className="truncate font-medium text-fg">
           {session?.userId ?? session?.sessionId ?? sessionKey.slice(0, 8)}
         </span>
@@ -284,7 +284,7 @@ function RunCard({ run, onOpen }: { run: RunSummary; onOpen: () => void }) {
         <span>{fmtTokens(run.inputTokens, run.outputTokens)} tok</span>
         <span>{fmtCost(run.cost)}</span>
         <span className="ml-auto flex items-center gap-1 text-muted">
-          open trace <ArrowRight size={11} weight="bold" />
+          open trace <ArrowRight size={11} />
         </span>
       </div>
     </button>

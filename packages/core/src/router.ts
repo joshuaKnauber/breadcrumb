@@ -79,6 +79,7 @@ export function normalizeIngestedSpan(raw: any, environment: string): SpanRecord
     traceId: raw.traceId,
     parentSpanId: typeof raw.parentSpanId === "string" ? raw.parentSpanId : null,
     name: raw.name,
+    functionId: typeof raw.functionId === "string" ? raw.functionId : null,
     kind: typeof raw.kind === "string" ? raw.kind : "span",
     environment: typeof raw.environment === "string" ? raw.environment : environment,
     userId: typeof raw.userId === "string" ? raw.userId : null,

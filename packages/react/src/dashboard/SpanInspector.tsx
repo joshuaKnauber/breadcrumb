@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CaretDown, CaretRight } from "@phosphor-icons/react";
+import { CaretDown, CaretRight } from "./ui/icons.js";
 import { fmtCost, fmtMs } from "@breadcrumb-sh/core/kit";
 import type { SpanRecord } from "@breadcrumb-sh/core/client";
 import { asMessages, displayName, selfTime } from "@breadcrumb-sh/core/kit";
@@ -120,11 +120,7 @@ export function SpanInspector({
                 </span>
                 <span className="truncate font-mono text-[11px] tabular-nums">{inputSummary}</span>
                 <span className="ml-auto text-faint">
-                  {inputOpen ? (
-                    <CaretDown size={10} weight="bold" />
-                  ) : (
-                    <CaretRight size={10} weight="bold" />
-                  )}
+                  {inputOpen ? <CaretDown size={10} /> : <CaretRight size={10} />}
                 </span>
               </button>
               {inputOpen && (

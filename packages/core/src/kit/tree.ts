@@ -29,6 +29,42 @@ export function displayName(span: SpanRecord): string {
   return span.name.replace(/^ai\./, "").replace(/\.(doStream|doGenerate|doEmbed)$/, "");
 }
 
+/**
+ * Children by parent id, with spans whose parent never arrived keyed under
+ * null. A trace can hold several of those: another exporter owns the span above
+ * them, or it was sampled away, and what reaches breadcrumb is a forest rather
+ * than a tree. Every one of them is a root, so none of the run goes unrendered.
+ */
+function groupByParent(spans: SpanRecord[]): Map<string | null, SpanRecord[]> {
+  const ids = new Set(spans.map((s) => s.id));
+  const byParent = new Map<string | null, SpanRecord[]>();
+  for (const s of spans) {
+    const key = s.parentSpanId && ids.has(s.parentSpanId) ? s.parentSpanId : null;
+    byParent.get(key)?.push(s) ?? byParent.set(key, [s]);
+  }
+  for (const list of byParent.values()) list.sort((a, b) => a.startTime - b.startTime);
+  // A genuine root outranks an orphan even when the orphan started first, which
+  // is how the trace list picks a run's name — the two must agree.
+  byParent.get(null)?.sort((a, b) => Number(!!a.parentSpanId) - Number(!!b.parentSpanId));
+  return byParent;
+}
+
+/** The spans no parent in this trace accounts for: the run's root, or roots. */
+export function rootSpans(spans: SpanRecord[]): SpanRecord[] {
+  return groupByParent(spans).get(null) ?? [];
+}
+
+/** Wall-clock extent of the whole run, floored at 1 so it is safe to divide by. */
+export function traceExtent(spans: SpanRecord[]): number {
+  let start = Infinity;
+  let end = -Infinity;
+  for (const s of spans) {
+    start = Math.min(start, s.startTime);
+    end = Math.max(end, s.endTime ?? s.startTime);
+  }
+  return end > start ? end - start : 1;
+}
+
 /** A row in the denoised flow view: a span, or a tucked-away run of trivia. */
 export type FlowRow =
   | { type: "span"; span: SpanRecord; depth: number; children: SpanRecord[] }
@@ -45,17 +81,10 @@ export type FlowRow =
  * trivial leaves collapse into a counted row rather than disappearing.
  */
 export function flowRows(spans: SpanRecord[]): FlowRow[] {
-  const ids = new Set(spans.map((s) => s.id));
-  const byParent = new Map<string | null, SpanRecord[]>();
-  for (const s of spans) {
-    const key = s.parentSpanId && ids.has(s.parentSpanId) ? s.parentSpanId : null;
-    byParent.get(key)?.push(s) ?? byParent.set(key, [s]);
-  }
-  for (const list of byParent.values()) list.sort((a, b) => a.startTime - b.startTime);
-
-  const root = (byParent.get(null) ?? [])[0];
-  if (!root) return [];
-  const total = (root.endTime ?? root.startTime) - root.startTime || 1;
+  const byParent = groupByParent(spans);
+  const roots = byParent.get(null) ?? [];
+  if (roots.length === 0) return [];
+  const total = traceExtent(spans);
 
   const kids = (s: SpanRecord) => byParent.get(s.id) ?? [];
   const extent = (s: SpanRecord) => (s.endTime ?? s.startTime) - s.startTime;
@@ -75,7 +104,7 @@ export function flowRows(spans: SpanRecord[]): FlowRow[] {
   const isMinor = (s: SpanRecord): boolean =>
     kids(s).length === 0 && s.kind === "span" && !load(s) && selfTime(s, []) < total * 0.01;
 
-  const out: FlowRow[] = [{ type: "span", span: root, depth: 0, children: kids(root) }];
+  const out: FlowRow[] = [];
 
   const walk = (parent: SpanRecord, depth: number): void => {
     const minor: SpanRecord[] = [];
@@ -91,20 +120,16 @@ export function flowRows(spans: SpanRecord[]): FlowRow[] {
     }
     if (minor.length > 0) out.push({ type: "minor", parentId: parent.id, spans: minor, depth });
   };
-  walk(root, 1);
+  for (const root of roots) {
+    out.push({ type: "span", span: root, depth: 0, children: kids(root) });
+    walk(root, 1);
+  }
   return out;
 }
 
 /** Flat depth-indexed rows for the unfolded tree, matching flowRows' shape. */
 export function fullRows(spans: SpanRecord[]): FlowRow[] {
-  const ids = new Set(spans.map((s) => s.id));
-  const byParent = new Map<string | null, SpanRecord[]>();
-  for (const s of spans) {
-    const key = s.parentSpanId && ids.has(s.parentSpanId) ? s.parentSpanId : null;
-    byParent.get(key)?.push(s) ?? byParent.set(key, [s]);
-  }
-  for (const list of byParent.values()) list.sort((a, b) => a.startTime - b.startTime);
-
+  const byParent = groupByParent(spans);
   const out: FlowRow[] = [];
   const walk = (parent: string | null, depth: number): void => {
     for (const s of byParent.get(parent) ?? []) {
@@ -128,11 +153,7 @@ export interface Hotspots {
 
 export function hotspots(spans: SpanRecord[]): Hotspots {
   const ids = new Set(spans.map((s) => s.id));
-  const byParent = new Map<string | null, SpanRecord[]>();
-  for (const s of spans) {
-    const key = s.parentSpanId && ids.has(s.parentSpanId) ? s.parentSpanId : null;
-    byParent.get(key)?.push(s) ?? byParent.set(key, [s]);
-  }
+  const byParent = groupByParent(spans);
   const nonRoot = spans.filter((s) => s.parentSpanId && ids.has(s.parentSpanId));
 
   let slowest: SpanRecord | null = null;

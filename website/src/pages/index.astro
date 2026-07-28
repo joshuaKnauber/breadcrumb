@@ -114,7 +114,8 @@ const aisdk = `const { text } = await streamText({
   prompt,
   experimental_telemetry: bc.telemetry({
     functionId: "generate-answer",
-    metadata: { userId, sessionId },
+    userId,
+    sessionId,
   }),
 });`;
 

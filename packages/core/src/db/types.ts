@@ -14,6 +14,12 @@ export interface SpanRecord {
   traceId: string;
   parentSpanId?: string | null;
   name: string;
+  /**
+   * The operation the caller named — `bc.telemetry({ functionId })`. Kept
+   * alongside `name` (which a tool span overrides with the tool's name) so cost
+   * and latency can be attributed to a function wherever its spans sit.
+   */
+  functionId?: string | null;
   kind: SpanKind;
   environment: string;
   userId?: string | null;

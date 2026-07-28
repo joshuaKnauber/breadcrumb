@@ -1,7 +1,7 @@
 "use client";
 import type { ReactNode } from "react";
 import { Select as BaseSelect } from "@base-ui/react/select";
-import { CaretDown, Check } from "@phosphor-icons/react";
+import { CaretDown, Check } from "./icons.js";
 import { usePortalContainer } from "../root.js";
 
 export interface SelectItem {
@@ -45,7 +45,7 @@ export function Select({
         {icon}
         <BaseSelect.Value className="truncate" />
         <BaseSelect.Icon className="ml-auto pl-1 text-faint">
-          <CaretDown size={11} weight="bold" />
+          <CaretDown size={11} />
         </BaseSelect.Icon>
       </BaseSelect.Trigger>
       <BaseSelect.Portal container={container}>
@@ -60,7 +60,7 @@ export function Select({
                 >
                   <span className="flex w-3 flex-none justify-center">
                     <BaseSelect.ItemIndicator>
-                      <Check size={11} weight="bold" />
+                      <Check size={11} />
                     </BaseSelect.ItemIndicator>
                   </span>
                   <BaseSelect.ItemText>{item.label}</BaseSelect.ItemText>

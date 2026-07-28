@@ -115,6 +115,24 @@ describe.each(adapters)("query surface ($label)", ({ make }) => {
     expect(s.avgLatencyMs).toBe(100);
   });
 
+  it("still names a trace whose root span never arrived", async () => {
+    // Another tracer owns the span above these two, so nothing here is
+    // parentless — the run must still read as the work it did.
+    const a = make();
+    await a.migrate();
+    await a.insertSpans([
+      base({ id: "d-op", traceId: "d", parentSpanId: "elsewhere", name: "support-reply",
+        input: { q: "hallo" }, output: { a: "welt" }, startTime: now, endTime: now + 100 }),
+      base({ id: "d-llm", traceId: "d", parentSpanId: "d-op", kind: "llm", name: "ai.streamText.doStream",
+        model: "gpt-5", startTime: now + 10, endTime: now + 90 }),
+    ]);
+
+    const rows = await a.listTraces({});
+    expect(rows[0]).toMatchObject({ traceId: "d", name: "support-reply", spanCount: 2 });
+    const runs = await a.listRuns("d");
+    expect(runs[0]).toMatchObject({ name: "support-reply", input: { q: "hallo" }, output: { a: "welt" } });
+  });
+
   it("gets a single span or null", async () => {
     const a = await seed();
     expect((await a.getSpan("t1-llm"))?.model).toBe("gpt-5");

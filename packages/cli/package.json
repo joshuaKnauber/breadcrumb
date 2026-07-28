@@ -1,6 +1,6 @@
 {
   "name": "@breadcrumb-sh/cli",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "CLI for breadcrumb — schema migrations.",
   "license": "MIT",
   "homepage": "https://breadcrumb.sh",
@@ -25,7 +25,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@breadcrumb-sh/core": "0.0.1",
+    "@breadcrumb-sh/core": "0.1.0",
     "better-sqlite3": "^11.7.0",
     "pg": "^8.22.0"
   },

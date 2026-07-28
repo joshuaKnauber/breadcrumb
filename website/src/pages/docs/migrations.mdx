@@ -17,7 +17,7 @@ Breadcrumb creates three prefixed tables, so they don't collide with your own
 schema:
 
 - `breadcrumb_spans` — one row per span. This holds everything in the dashboard:
-  trace and parent IDs, name and kind, environment, user and session, model and
+  trace and parent IDs, name, function ID and kind, environment, user and session, model and
   provider, token counts (input, output, cached, cache-write, reasoning), cost,
   status and error, the input/output/metadata payloads, and start/end
   timestamps. Traces and sessions are derived from these rows at query time.
@@ -39,6 +39,7 @@ data definition language (DDL).
 | `trace_id`            | text    | no       |
 | `parent_span_id`      | text    | yes      |
 | `name`                | text    | no       |
+| `function_id`         | text    | yes      |
 | `kind`                | text    | no       |
 | `environment`         | text    | no       |
 | `user_id`             | text    | yes      |

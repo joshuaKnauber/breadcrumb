@@ -18,6 +18,7 @@ export const spanColumns: Record<string, ColumnSpec> = {
   trace_id: { type: "text" },
   parent_span_id: { type: "text", nullable: true },
   name: { type: "text" },
+  function_id: { type: "text", nullable: true },
   kind: { type: "text" },
   environment: { type: "text" },
   user_id: { type: "text", nullable: true },

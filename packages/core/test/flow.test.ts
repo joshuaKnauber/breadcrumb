@@ -169,16 +169,49 @@ describe("normalizeSpanData tool naming", () => {
     expect(span.name).toBe("ai.streamText.doStream");
   });
 
-  it("still prefers functionId on the root span", () => {
-    const span = normalizeSpanData(
+  it("names the operation span after functionId wherever it sits", () => {
+    const attributes = {
+      "ai.operationId": "ai.streamText",
+      "ai.telemetry.functionId": "support-reply",
+    };
+    const root = normalizeSpanData(
+      { ...base, parentSpanId: null, name: "ai.streamText", attributes },
+      "production"
+    );
+    // Nested under someone else's span — Sentry, Langfuse, an HTTP middleware.
+    const nested = normalizeSpanData({ ...base, name: "ai.streamText", attributes }, "production");
+    expect(root.name).toBe("support-reply");
+    expect(nested.name).toBe("support-reply");
+  });
+
+  it("keeps functionId off the inner model call and the tool spans", () => {
+    const doStream = normalizeSpanData(
       {
         ...base,
-        parentSpanId: null,
-        name: "ai.streamText",
-        attributes: { "ai.telemetry.functionId": "support-reply", "ai.toolCall.name": "nope" },
+        name: "ai.streamText.doStream",
+        attributes: {
+          "ai.operationId": "ai.streamText.doStream",
+          "ai.telemetry.functionId": "support-reply",
+        },
       },
       "production"
     );
-    expect(span.name).toBe("support-reply");
+    const tool = normalizeSpanData(
+      {
+        ...base,
+        name: "ai.toolCall",
+        attributes: {
+          "ai.operationId": "ai.toolCall",
+          "ai.telemetry.functionId": "support-reply",
+          "ai.toolCall.name": "lookup-order",
+        },
+      },
+      "production"
+    );
+    expect(doStream.name).toBe("ai.streamText.doStream");
+    expect(tool.name).toBe("lookup-order");
+    // Named or not, every span of the call keeps the functionId as a dimension.
+    expect(doStream.functionId).toBe("support-reply");
+    expect(tool.functionId).toBe("support-reply");
   });
 });

@@ -16,14 +16,17 @@ const { text } = await streamText({
   prompt,
   experimental_telemetry: bc.telemetry({
     functionId: "generate-answer",
-    metadata: { userId, sessionId },
+    userId,
+    sessionId,
+    metadata: { plan: "pro" },
   }),
 });
 ```
 
-`functionId` names the run. `metadata` is attached to the trace and surfaces as
-`userId` and `sessionId` when those keys are present, so you can group traces by
-user or conversation.
+`functionId` names the call and is what cost is attributed to — it holds wherever
+the call sits, including under a span from some other tracer (Sentry, Langfuse,
+an HTTP middleware). `userId` and `sessionId` group traces by user and by
+conversation; anything else goes in `metadata`.
 
 Usage is counted once per model call, even across multi-step tool loops — the
 outer wrapper spans the SDK emits are treated as duplicates, not double-counted.

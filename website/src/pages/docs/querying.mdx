@@ -48,6 +48,6 @@ Lists are keyset-paginated: pass `limit` and the `nextCursor` from the previous 
 
 ## Beyond the built-in queries
 
-`bc.api` is a curated surface. When you need an aggregation it doesn't cover — "cost by tenant," "p95 by model" — remember it's **your** database. Query the `breadcrumb_spans` table directly with your own Drizzle/Prisma/pg client. A trace is spans sharing a `trace_id`; the root is the span with `parent_span_id IS NULL`; a session is `session_id`. Migrations are additive-only, so the schema is a stable contract.
+`bc.api` is a curated surface. When you need an aggregation it doesn't cover — "cost by tenant," "p95 by model" — remember it's **your** database. Query the `breadcrumb_spans` table directly with your own Drizzle/Prisma/pg client. A trace is spans sharing a `trace_id`; the root is the span with `parent_span_id IS NULL`, or — when another tracer owns the span above yours and it never reaches breadcrumb — the trace's earliest span; a session is `session_id`. Group cost and latency by `function_id` to attribute them to a named call wherever it sits. Migrations are additive-only, so the schema is a stable contract.
 
 To read the same data from the browser instead of the server, use the [typed client and React hooks](/docs/react/). To add a view to the shipped dashboard rather than replace it, see [custom pages](/docs/dashboard/#adding-pages).

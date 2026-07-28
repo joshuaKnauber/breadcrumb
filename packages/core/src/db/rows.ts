@@ -49,6 +49,25 @@ export function traceFilterSql(table: string, filter: TraceFilter, ph: Placehold
   return preds.join(" AND ");
 }
 
+/**
+ * Ranks each span within its trace so `root_rank = 1` marks the run's root.
+ *
+ * A root is a span with no parent — except the parent may never have reached
+ * breadcrumb: another exporter owns it, it was sampled away, or the run is
+ * still in flight. Then every span points at a parent that isn't there and a
+ * plain `parent_span_id IS NULL` finds no root at all, dropping the run's name
+ * and payload. Ordering parentless-first, then earliest-starting, takes the
+ * true root when there is one and the topmost surviving span when there isn't.
+ */
+const ROOT_ORDER =
+  "PARTITION BY trace_id ORDER BY CASE WHEN parent_span_id IS NULL THEN 0 ELSE 1 END, start_time, id";
+
+/** The span table with `root_rank` attached, as the aggregations read it. */
+function rankedSpans(table: string, whereSql: string): string {
+  return `(SELECT *, ROW_NUMBER() OVER (${ROOT_ORDER}) AS root_rank
+    FROM ${table} ${whereSql ? `WHERE ${whereSql}` : ""}) s`;
+}
+
 /** Keyset predicate for "rows after `cursor`" given a DESC (sortExpr, keyExpr). */
 export function keysetSql(sortExpr: string, keyExpr: string, cursor: string, ph: Placeholder): string {
   const c = decodeCursor(cursor);
@@ -84,6 +103,7 @@ export function spanToRow(span: SpanRecord): Record<string, unknown> {
     trace_id: span.traceId,
     parent_span_id: span.parentSpanId ?? null,
     name: span.name,
+    function_id: span.functionId ?? null,
     kind: span.kind,
     environment: span.environment,
     user_id: span.userId ?? null,
@@ -130,6 +150,7 @@ export function rowToSpan(row: Record<string, unknown>): SpanRecord {
     traceId: row.trace_id as string,
     parentSpanId: (row.parent_span_id as string | null) ?? null,
     name: row.name as string,
+    functionId: (row.function_id as string | null) ?? null,
     kind: row.kind as SpanRecord["kind"],
     environment: row.environment as string,
     userId: (row.user_id as string | null) ?? null,
@@ -288,9 +309,9 @@ export function shapeStats(row: Record<string, unknown> | undefined): Stats {
 export function runSummarySelect(table: string, keyFilter: string, castText: string): string {
   return `SELECT
     trace_id,
-    COALESCE(MAX(CASE WHEN parent_span_id IS NULL THEN name END), MIN(name)) AS name,
-    MAX(CASE WHEN parent_span_id IS NULL THEN input${castText} END) AS input,
-    MAX(CASE WHEN parent_span_id IS NULL THEN output${castText} END) AS output,
+    MAX(CASE WHEN root_rank = 1 THEN name END) AS name,
+    MAX(CASE WHEN root_rank = 1 THEN input${castText} END) AS input,
+    MAX(CASE WHEN root_rank = 1 THEN output${castText} END) AS output,
     MIN(start_time) AS start_time,
     MAX(end_time) AS end_time,
     COUNT(*) AS span_count,
@@ -300,12 +321,14 @@ export function runSummarySelect(table: string, keyFilter: string, castText: str
     SUM(COALESCE(input_tokens, 0)) AS input_tokens,
     SUM(COALESCE(output_tokens, 0)) AS output_tokens,
     SUM(cost) AS cost
-  FROM ${table}
-  WHERE trace_id IN (
-    SELECT trace_id FROM ${table}
-    GROUP BY trace_id
-    HAVING COALESCE(MAX(session_id), trace_id) = ${keyFilter}
-  )
+  FROM ${rankedSpans(
+    table,
+    `trace_id IN (
+      SELECT trace_id FROM ${table}
+      GROUP BY trace_id
+      HAVING COALESCE(MAX(session_id), trace_id) = ${keyFilter}
+    )`
+  )}
   GROUP BY trace_id
   ORDER BY MIN(start_time) ASC`;
 }
@@ -328,26 +351,27 @@ export function costByDaySelect(table: string, dayExpr: string, filter: string):
   ORDER BY day ASC`;
 }
 
-/** Cost attributed to each run's root-span name (the "function"). */
+/**
+ * Cost attributed to the function that spent it: the caller's functionId, or
+ * the run's root-span name for spans that carry none (manual `bc.trace` work,
+ * or instrumentation that never named itself). Attributing per span rather than
+ * per trace splits a run that calls two functions between them, and survives a
+ * root that belongs to some other tracer.
+ */
 export function costByFunctionSelect(table: string, filter: string): string {
-  return `SELECT root_name AS key,
-    SUM(cost) AS cost,
-    SUM(input_tokens) AS input_tokens,
-    SUM(cached_input_tokens) AS cached_input_tokens,
-    SUM(output_tokens) AS output_tokens,
-    COUNT(*) AS count
+  return `SELECT COALESCE(function_id, root_name) AS key,
+    SUM(COALESCE(cost, 0)) AS cost,
+    SUM(COALESCE(input_tokens, 0)) AS input_tokens,
+    SUM(COALESCE(cached_input_tokens, 0)) AS cached_input_tokens,
+    SUM(COALESCE(output_tokens, 0)) AS output_tokens,
+    COUNT(DISTINCT trace_id) AS count
   FROM (
-    SELECT trace_id,
-      MAX(CASE WHEN parent_span_id IS NULL THEN name END) AS root_name,
-      SUM(COALESCE(cost, 0)) AS cost,
-      SUM(COALESCE(input_tokens, 0)) AS input_tokens,
-      SUM(COALESCE(cached_input_tokens, 0)) AS cached_input_tokens,
-      SUM(COALESCE(output_tokens, 0)) AS output_tokens
+    SELECT trace_id, function_id, cost, input_tokens, cached_input_tokens, output_tokens,
+      FIRST_VALUE(name) OVER (${ROOT_ORDER}) AS root_name
     FROM ${table}
     WHERE 1 = 1 ${filter}
-    GROUP BY trace_id
   ) t
-  GROUP BY root_name
+  GROUP BY COALESCE(function_id, root_name)
   ORDER BY cost DESC`;
 }
 
@@ -410,7 +434,7 @@ export function shapeCostSummary(
 export function traceSummarySelect(table: string, whereSql: string, havingSql: string): string {
   return `SELECT
     trace_id,
-    COALESCE(MAX(CASE WHEN parent_span_id IS NULL THEN name END), MIN(name)) AS name,
+    MAX(CASE WHEN root_rank = 1 THEN name END) AS name,
     MIN(environment) AS environment,
     MAX(user_id) AS user_id,
     MAX(session_id) AS session_id,
@@ -421,8 +445,7 @@ export function traceSummarySelect(table: string, whereSql: string, havingSql: s
     SUM(COALESCE(input_tokens, 0)) AS input_tokens,
     SUM(COALESCE(output_tokens, 0)) AS output_tokens,
     SUM(cost) AS cost
-  FROM ${table}
-  ${whereSql ? `WHERE ${whereSql}` : ""}
+  FROM ${rankedSpans(table, whereSql)}
   GROUP BY trace_id
   ${havingSql ? `HAVING ${havingSql}` : ""}
   ORDER BY MIN(start_time) DESC, trace_id DESC`;

@@ -1,6 +1,6 @@
 {
   "name": "@breadcrumb-sh/core",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Embeddable LLM tracing for TypeScript apps. Your database, your deployment, your UI.",
   "license": "MIT",
   "homepage": "https://breadcrumb.sh",

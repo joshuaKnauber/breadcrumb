@@ -15,16 +15,26 @@ import { fromReadableSpan, normalizeSpanData } from "./normalize.js";
 export type TelemetryMetadataValue = string | number | boolean | string[] | number[] | boolean[];
 
 export interface TelemetryOptions {
+  /** Names the operation. Every span of the call carries it, so a run reads as
+   * what it does rather than as `ai.streamText`, wherever it sits in a trace. */
   functionId?: string;
+  /** Your app's end-user id — groups and filters traces by who ran them. */
+  userId?: string;
+  /** Groups related runs into one conversation/session. */
+  sessionId?: string;
   metadata?: Record<string, TelemetryMetadataValue>;
   recordInputs?: boolean;
   recordOutputs?: boolean;
 }
 
 /** The settings object the Vercel AI SDK expects for experimental_telemetry. */
-export interface TelemetrySettings extends TelemetryOptions {
+export interface TelemetrySettings {
   isEnabled: true;
   tracer: Tracer;
+  functionId?: string;
+  metadata?: Record<string, TelemetryMetadataValue>;
+  recordInputs?: boolean;
+  recordOutputs?: boolean;
 }
 
 export interface TelemetryPipeline {
@@ -84,8 +94,20 @@ export function createTelemetryPipeline(deps: {
 
   return {
     tracer,
-    telemetry(options = {}) {
-      return { isEnabled: true, tracer, ...options };
+    // userId and sessionId ride along as telemetry metadata, which is the only
+    // channel the AI SDK forwards. Naming them here rather than leaving them as
+    // two metadata keys that happen to be read back on ingest is the difference
+    // between a documented option and a secret.
+    telemetry({ userId, sessionId, metadata, ...rest } = {}) {
+      const merged: Record<string, TelemetryMetadataValue> = { ...metadata };
+      if (userId !== undefined) merged.userId = userId;
+      if (sessionId !== undefined) merged.sessionId = sessionId;
+      return {
+        isEnabled: true,
+        tracer,
+        ...rest,
+        ...(Object.keys(merged).length > 0 ? { metadata: merged } : {}),
+      };
     },
     flush: () => provider.forceFlush(),
     shutdown: () => provider.shutdown(),

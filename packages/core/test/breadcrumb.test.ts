@@ -134,6 +134,21 @@ describe("bc.telemetry (AI SDK dialect)", () => {
     expect(root.inputTokens).toBeNull();
     expect(llm.parentSpanId).toBe(root.id);
   });
+
+  it("carries userId and sessionId through as telemetry metadata", () => {
+    const bc = makeBc();
+    const settings = bc.telemetry({
+      functionId: "support-reply",
+      userId: "u1",
+      sessionId: "sess-A",
+      metadata: { channel: "web" },
+    });
+    // The AI SDK only forwards functionId and metadata, so the two named
+    // options fold in there — and never leak as unknown top-level settings.
+    expect(settings.metadata).toEqual({ channel: "web", userId: "u1", sessionId: "sess-A" });
+    expect(settings).not.toHaveProperty("userId");
+    expect(bc.telemetry().metadata).toBeUndefined();
+  });
 });
 
 describe("handler", () => {

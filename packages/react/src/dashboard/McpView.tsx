@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
-import { Check, Copy } from "@phosphor-icons/react";
+import { Check, Copy } from "./ui/icons.js";
 import type { McpKeyRecord } from "@breadcrumb-sh/core/client";
 import { fmtAgo } from "@breadcrumb-sh/core/kit";
 import { useBreadcrumbClient, useCreateMcpKey, useMcpKeys, useRevokeMcpKey } from "../hooks.js";
@@ -324,7 +324,7 @@ function CopyButton({
       aria-label={label}
       className={`flex flex-none items-center gap-1.5 rounded-md border border-line bg-panel px-2 py-1 text-[11.5px] text-muted hover:border-line-strong hover:text-fg ${className}`}
     >
-      {state === "copied" ? <Check size={12} weight="bold" /> : <Copy size={12} />}
+      {state === "copied" ? <Check size={12} /> : <Copy size={12} />}
       {state === "failed" ? "Copy failed" : state === "copied" ? "Copied" : "Copy"}
     </button>
   );

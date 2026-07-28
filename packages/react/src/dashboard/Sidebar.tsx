@@ -9,7 +9,7 @@ import {
   SidebarSimple,
   Stack,
   Sun,
-} from "@phosphor-icons/react";
+} from "./ui/icons.js";
 import { Logo } from "./ui/Logo.js";
 import { ToggleGroup } from "./ui/ToggleGroup.js";
 import { RouteLink, useNavigation } from "./navigation.js";

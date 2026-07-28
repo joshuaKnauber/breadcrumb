@@ -45,9 +45,17 @@ const COLUMNS: Record<string, Col> = {
     type: "string",
     native: "text",
     nullable: true,
-    description: "Parent span's id. NULL marks the trace's root span, whose name is the run's name.",
+    description:
+      "Parent span's id. NULL marks the trace's root span, whose name is the run's name. It can also be non-NULL and point at a span that is not in this table, when another tracer owns the span above it — treat the trace's earliest span as its root in that case.",
   },
   name: { type: "string", native: "text", description: "Operation name, e.g. the tool or function called." },
+  function_id: {
+    type: "string",
+    native: "text",
+    nullable: true,
+    description:
+      "The operation the caller named (functionId), carried by every span of that call. Group cost and latency by this to attribute them to a function; NULL for spans that were never named.",
+  },
   kind: {
     type: "enum",
     native: "text",

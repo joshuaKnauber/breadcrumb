@@ -16,7 +16,6 @@ export default defineConfig({
       "@tanstack/react-query",
       "@base-ui/react",
       /^@base-ui\/react\//,
-      "@phosphor-icons/react",
       "chart.js",
       /^chart\.js\//,
       "react-chartjs-2",

@@ -1,5 +1,5 @@
 "use client";
-import { GlobeHemisphereWest } from "@phosphor-icons/react";
+import { GlobeHemisphereWest } from "./icons.js";
 import { useEnvironments } from "../../hooks.js";
 import { useEnvironmentRoute } from "../navigation.js";
 import { Select } from "./Select.js";

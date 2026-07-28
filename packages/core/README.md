@@ -68,9 +68,12 @@ import { generateText } from "ai";
 const { text } = await generateText({
   model: openai("gpt-5"),
   prompt,
-  experimental_telemetry: bc.telemetry({ functionId: "generate-answer" }),
+  experimental_telemetry: bc.telemetry({ functionId: "generate-answer", userId, sessionId }),
 });
 ```
+
+`functionId` names the call and carries the cost attribution, wherever the call
+sits in the trace; `userId` and `sessionId` group runs by user and conversation.
 
 **Manual tracing.** `bc.trace(name, attrs?, fn)`, with nested `t.span(...)`:
 

@@ -179,15 +179,38 @@ function normalizeUsage(attrs: Attrs): Usage {
   return { ...EMPTY_USAGE };
 }
 
+/**
+ * Whether the functionId should stand in for this span's name. It should when
+ * the name came from the AI SDK's own operation (`ai.streamText`), which says
+ * nothing about the work; a span the caller named itself keeps that name.
+ *
+ * The SDK stamps `ai.telemetry.functionId` on every span of a call — the
+ * operation wrapper, the `.do*` model call and each `ai.toolCall` alike — so
+ * only the wrapper takes its name from it, or one call would read as three
+ * identical rows.
+ */
+function namedByFunctionId(attrs: Attrs): boolean {
+  const op = str(attrs["ai.operationId"]);
+  return op !== null && !op.includes(".do");
+}
+
 export function normalizeSpanData(data: OtelSpanData, defaultEnvironment: string): SpanRecord {
   const attrs = data.attributes;
   const isError = data.error !== null;
 
+  const functionId = first(
+    str(attrs["breadcrumb.functionId"]),
+    str(attrs["ai.telemetry.functionId"])
+  );
+
   // Tool spans arrive named after the operation (`ai.toolCall`), not the tool,
   // so every tool in a trace would read alike. The tool name is the useful one.
-  const name = !data.parentSpanId
-    ? (str(attrs["ai.telemetry.functionId"]) ?? data.name)
-    : (str(attrs["ai.toolCall.name"]) ?? str(attrs["gen_ai.tool.name"]) ?? data.name);
+  // Below that, the caller's functionId beats the SDK's operation name wherever
+  // the span sits: assuming it sits at the root only holds while breadcrumb
+  // owns the trace, and any other instrumentation (Sentry, Langfuse, an HTTP
+  // middleware) puts a span above it and drops the run back to `ai.streamText`.
+  const toolName = first(str(attrs["ai.toolCall.name"]), str(attrs["gen_ai.tool.name"]));
+  const name = toolName ?? (namedByFunctionId(attrs) ? functionId : null) ?? data.name;
 
   const kind = inferKind(data.name, attrs);
 
@@ -220,6 +243,7 @@ export function normalizeSpanData(data: OtelSpanData, defaultEnvironment: string
     traceId: data.traceId,
     parentSpanId: data.parentSpanId,
     name,
+    functionId,
     kind,
     environment: data.environment ?? defaultEnvironment,
     userId: first(

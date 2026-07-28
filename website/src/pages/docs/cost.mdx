@@ -39,7 +39,7 @@ Keys match as lowercase substrings of the span's model, longest key wins — so 
 
 ## The Cost view
 
-The built-in dashboard's **Cost** tab charts spend per day and model, and breaks it down by function (root-span name) — so you can see which flow is expensive. Everything there is also available programmatically:
+The built-in dashboard's **Cost** tab charts spend per day and model, and breaks it down by function — the `functionId` the call was given, falling back to the run's root-span name for spans that carry none — so you can see which flow is expensive. Everything there is also available programmatically:
 
 ```ts
 const summary = await bc.api.costSummary({ days: 14, environment: "production" });

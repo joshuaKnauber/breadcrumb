@@ -2,6 +2,10 @@ import { SpanStatusCode, type Span, type Tracer } from "@opentelemetry/api";
 import type { SpanKind } from "./db/types.js";
 
 export interface SpanAttrs {
+  /** The operation this span belongs to, for attributing cost to a function
+   * the way `bc.telemetry({ functionId })` does. Defaults to nothing: a manual
+   * span is attributed to its run's root name. */
+  functionId?: string;
   kind?: SpanKind;
   model?: string;
   provider?: string;
@@ -20,6 +24,7 @@ export interface SpanAttrs {
 }
 
 export interface TraceAttrs {
+  functionId?: string;
   userId?: string;
   sessionId?: string;
   metadata?: Record<string, unknown>;
@@ -39,6 +44,7 @@ export type TraceFn = {
 };
 
 function applySpanAttrs(span: Span, attrs: SpanAttrs): void {
+  if (attrs.functionId !== undefined) span.setAttribute("breadcrumb.functionId", attrs.functionId);
   if (attrs.kind !== undefined) span.setAttribute("breadcrumb.kind", attrs.kind);
   if (attrs.model !== undefined) span.setAttribute("breadcrumb.model", attrs.model);
   if (attrs.provider !== undefined) span.setAttribute("breadcrumb.provider", attrs.provider);
@@ -54,6 +60,7 @@ function applySpanAttrs(span: Span, attrs: SpanAttrs): void {
 }
 
 function applyTraceAttrs(span: Span, attrs: TraceAttrs): void {
+  if (attrs.functionId !== undefined) span.setAttribute("breadcrumb.functionId", attrs.functionId);
   if (attrs.userId !== undefined) span.setAttribute("breadcrumb.userId", attrs.userId);
   if (attrs.sessionId !== undefined) span.setAttribute("breadcrumb.sessionId", attrs.sessionId);
   if (attrs.metadata !== undefined) span.setAttribute("breadcrumb.metadata", JSON.stringify(attrs.metadata));
