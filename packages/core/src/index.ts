@@ -1,3 +1,4 @@
+import type { ReadableSpan, SpanProcessor } from "@opentelemetry/sdk-trace-base";
 import type {
   CostQueryOptions,
   CostSummary,
@@ -74,6 +75,13 @@ export interface BreadcrumbOptions {
    */
   flushMode?: "batch" | "sync";
   /**
+   * Filters what `bc.spanProcessor` keeps when it's registered on a provider you
+   * own. By default only spans breadcrumb can read are stored (`ai.*`,
+   * `gen_ai.*`, `breadcrumb.*`); return true for more to keep your own
+   * instrumentation's spans alongside them.
+   */
+  shouldExport?: (span: ReadableSpan) => boolean;
+  /**
    * "auto" (default): create/upgrade the schema on first use — great for local
    * development. "manual": never run DDL at runtime; you own migrations, applied
    * with `breadcrumb migrate` or `breadcrumb generate` plus your tooling.
@@ -96,6 +104,12 @@ export interface Breadcrumb {
   trace: TraceFn;
   /** Preconfigured experimental_telemetry settings for the Vercel AI SDK. */
   telemetry: (options?: TelemetryOptions) => TelemetrySettings;
+  /**
+   * An OpenTelemetry span processor for apps that already own a TracerProvider
+   * (@vercel/otel, NodeSDK, Sentry). Register it and model spans reach breadcrumb
+   * without threading `bc.telemetry()` through every call.
+   */
+  readonly spanProcessor: SpanProcessor;
   /** Flush buffered spans (serverless: call before the runtime freezes). */
   flush: () => Promise<void>;
   /**
@@ -201,6 +215,7 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
     environment,
     write: (spans) => api.ingestSpans({ spans }),
     flushMode: options.flushMode,
+    shouldExport: options.shouldExport,
   });
   const trace = createTraceFn(pipeline.tracer);
 
@@ -234,6 +249,9 @@ export function breadcrumb(options: BreadcrumbOptions): Breadcrumb {
     handler,
     trace,
     telemetry: pipeline.telemetry,
+    get spanProcessor() {
+      return pipeline.spanProcessor;
+    },
     flush: pipeline.flush,
     api,
     options: { ...options, basePath, environment },

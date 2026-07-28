@@ -25,6 +25,32 @@ describe("payload guarding", () => {
     expect(String(root.output)).toContain("truncated");
   });
 
+  it("keeps a capped message array renderable as messages", async () => {
+    const bc = breadcrumb({
+      database: sqlite(new Database(":memory:")),
+      environment: "test",
+      maxPayloadChars: 400,
+    });
+    const messages = [
+      { role: "system", content: "You are a support agent." },
+      { role: "user", content: "x".repeat(4000) },
+      { role: "assistant", content: "y".repeat(4000) },
+    ];
+    await bc.trace("t", async (t) => t.set({ input: messages }));
+    await bc.flush();
+
+    const input = (await firstSpan(bc)).input;
+    expect(Array.isArray(input)).toBe(true);
+    const roles = (input as { role: string }[]).map((m) => m.role);
+    expect(roles).toEqual(["system", "user", "assistant"]);
+
+    // The short message survives whole; only the long ones pay for the budget.
+    const parsed = input as { role: string; content: string }[];
+    expect(parsed[0]!.content).toBe("You are a support agent.");
+    expect(parsed[1]!.content).toContain("truncated");
+    expect(JSON.stringify(input).length).toBeLessThanOrEqual(400);
+  });
+
   it("leaves small payloads untouched", async () => {
     const bc = breadcrumb({ database: sqlite(new Database(":memory:")), environment: "test" });
     await bc.trace("t", async (t) => t.set({ input: { q: "hi" } }));

@@ -4,6 +4,7 @@ import { Tooltip } from "@base-ui/react/tooltip";
 import { CaretDown, CaretRight, XCircle } from "./ui/icons.js";
 import type { SpanRecord } from "@breadcrumb-sh/core/client";
 import {
+  defaultCollapsed,
   defaultSelection,
   displayName,
   extent,
@@ -12,6 +13,7 @@ import {
   fmtTokens,
   heatLevel,
   keyboardTarget,
+  lastActivity,
   selfIntervals,
   selfTime,
   traceModel,
@@ -31,23 +33,72 @@ import { Loading, Skeleton } from "./ui/Skeleton.js";
 const VIEWS = [
   { value: "flow" as const, label: "Flow" },
   { value: "full" as const, label: "Full tree" },
+  { value: "timeline" as const, label: "Timeline" },
 ];
+
+/** A run that was writing spans this recently is probably still going. */
+const LIVE_WINDOW_MS = 30_000;
+const LIVE_POLL_MS = 5_000;
 
 export function TraceView() {
   const { route, go } = useNavigation();
   const traceId = route.traceId ?? "";
   const sessionKey = route.sessionKey;
-  const view: TraceViewMode = route.view === "full" ? "full" : "flow";
+  const view: TraceViewMode =
+    route.view === "full" || route.view === "timeline" ? route.view : "flow";
 
-  const spansQuery = useTrace(traceId || null);
+  // Spans are only stored once they end, so an in-flight run arrives piecemeal.
+  // Poll while the run is still producing them and stop once it goes quiet, so
+  // a finished trace costs nothing to sit on.
+  const spansQuery = useTrace(traceId || null, {
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data || data.length === 0) return false;
+      return Date.now() - lastActivity(data) < LIVE_WINDOW_MS ? LIVE_POLL_MS : false;
+    },
+  });
   const spans = useMemo(() => spansQuery.data ?? [], [spansQuery.data]);
 
+  // The poll that discovers a run has gone quiet often returns identical spans,
+  // which re-renders nothing — so a clock, running only while live, is what
+  // lets the indicator turn itself off.
+  const [, setClock] = useState(0);
+  const live = spans.length > 0 && Date.now() - lastActivity(spans) < LIVE_WINDOW_MS;
+  useEffect(() => {
+    if (!live) return;
+    const id = setInterval(() => setClock((n) => n + 1), LIVE_POLL_MS);
+    return () => clearInterval(id);
+  }, [live]);
+
   const [openMinor, setOpenMinor] = useState<Set<string>>(new Set());
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set<string>());
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Deep runs open folded, one level at a time. Seeded once per trace and view
+  // rather than on every change, so a poll landing new spans doesn't re-fold
+  // what the reader just opened.
+  const seeded = useRef<string | null>(null);
+  useEffect(() => {
+    const key = `${traceId}:${view}`;
+    if (spans.length === 0 || seeded.current === key) return;
+    seeded.current = key;
+    setCollapsed(defaultCollapsed(spans, view));
+  }, [spans, traceId, view]);
+
+  const toggleCollapsed = useCallback((id: string) => {
+    setCollapsed((cur) => {
+      const next = new Set(cur);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  }, []);
 
   // Rows, scales, hotspots and totals all come from one pure model, so the
   // waterfall here and a hand-built one see exactly the same numbers.
-  const model = useMemo(() => traceModel(spans, { mode: view, openMinor }), [spans, view, openMinor]);
+  const model = useMemo(
+    () => traceModel(spans, { mode: view, openMinor, collapsed }),
+    [spans, view, openMinor, collapsed]
+  );
   const { root, total, maxSelf, rows, totals, failed, spots, byId, childrenById } = model;
 
   // Open on the run's worst moment rather than a collapsed root.
@@ -71,6 +122,14 @@ export function TraceView() {
       const active = document.activeElement;
       const engaged = !root || active === null || active === document.body || root.contains(active);
       if (!engaged) return;
+      if ((e.key === "h" || e.key === "l") && selectedId) {
+        const row = model.rows.find((r) => r.type === "span" && r.span.id === selectedId);
+        if (row?.type !== "span" || !row.hasChildren) return;
+        if (row.collapsed === (e.key === "h")) return;
+        toggleCollapsed(selectedId);
+        e.preventDefault();
+        return;
+      }
       const next = keyboardTarget(model, selectedId, e.key);
       if (next === null) return;
       select(next);
@@ -78,7 +137,7 @@ export function TraceView() {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [model, selectedId, select, container]);
+  }, [model, selectedId, select, container, toggleCollapsed]);
 
   const selected = (selectedId ? byId.get(selectedId) : null) ?? null;
   const selectedKids = selected ? (childrenById.get(selected.id) ?? []) : [];
@@ -109,6 +168,7 @@ export function TraceView() {
 
       <VerdictRail
         root={root}
+        live={live}
         failed={failed}
         spanCount={spans.length}
         totals={totals}
@@ -121,51 +181,67 @@ export function TraceView() {
 
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1.02fr)_minmax(0,1fr)]">
         <div className="flex min-h-0 min-w-0 flex-col border-line lg:border-r">
-          <div className="sticky top-0 z-10 grid grid-cols-[250px_1fr] items-end gap-2.5 border-b border-line bg-plate px-3 pt-2 pb-1.5">
+          <div
+            className={`sticky top-0 z-10 items-end gap-2.5 border-b border-line bg-plate px-3 pt-2 pb-1.5 ${
+              view === "timeline" ? "flex" : "grid grid-cols-[250px_1fr]"
+            }`}
+          >
             <ToggleGroup
               ariaLabel="Span detail"
               value={view}
               options={VIEWS}
-              onChange={(v) => go({ ...route, view: v === "full" ? "full" : undefined }, { replace: true })}
+              onChange={(v) =>
+                go({ ...route, view: v === "flow" ? undefined : v }, { replace: true })
+              }
             />
-            <Axis total={total} />
+            {view !== "timeline" && <Axis total={total} />}
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 pt-1.5 pb-4">
-            <Tooltip.Provider delay={250}>
-              {rows.map((item) =>
-                item.type === "span" ? (
-                  <SpanRow
-                    key={item.span.id}
-                    span={item.span}
-                    depth={item.depth}
-                    kids={item.children}
-                    root={root}
-                    total={total}
-                    maxSelf={maxSelf}
-                    selected={selectedId === item.span.id}
-                    onSelect={select}
-                  />
-                ) : (
-                  <MinorRow
-                    key={`minor:${item.parentId}`}
-                    row={item}
-                    open={item.open}
-                    onToggle={() =>
-                      setOpenMinor((cur) => {
-                        const next = new Set(cur);
-                        if (next.has(item.parentId)) next.delete(item.parentId);
-                        else next.add(item.parentId);
-                        return next;
-                      })
-                    }
-                  />
-                )
-              )}
-            </Tooltip.Provider>
-          </div>
+          {view === "timeline" ? (
+            <Timeline
+              rows={rows}
+              root={root}
+              total={total}
+              maxSelf={maxSelf}
+              selectedId={selectedId}
+              onSelect={select}
+            />
+          ) : (
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 pt-1.5 pb-4">
+              <Tooltip.Provider delay={250}>
+                {rows.map((item) =>
+                  item.type === "span" ? (
+                    <SpanRow
+                      key={item.span.id}
+                      row={item}
+                      root={root}
+                      total={total}
+                      maxSelf={maxSelf}
+                      selected={selectedId === item.span.id}
+                      onSelect={select}
+                      onToggleCollapsed={toggleCollapsed}
+                    />
+                  ) : (
+                    <MinorRow
+                      key={`minor:${item.parentId}`}
+                      row={item}
+                      open={item.open}
+                      onToggle={() =>
+                        setOpenMinor((cur) => {
+                          const next = new Set(cur);
+                          if (next.has(item.parentId)) next.delete(item.parentId);
+                          else next.add(item.parentId);
+                          return next;
+                        })
+                      }
+                    />
+                  )
+                )}
+              </Tooltip.Provider>
+            </div>
+          )}
 
-          <Legend />
+          <Legend timeline={view === "timeline"} />
         </div>
 
         <div className="min-h-0 min-w-0 overflow-y-auto bg-plate">
@@ -182,6 +258,7 @@ export function TraceView() {
 
 function VerdictRail({
   root,
+  live,
   failed,
   spanCount,
   totals,
@@ -192,6 +269,7 @@ function VerdictRail({
   onJump,
 }: {
   root: SpanRecord;
+  live: boolean;
   failed: boolean;
   spanCount: number;
   totals: TraceTotals;
@@ -246,6 +324,12 @@ function VerdictRail({
       <span className="flex items-center gap-2">
         <span className={`h-[7px] w-[7px] flex-none rounded-full ${failed ? "bg-err" : "bg-bar"}`} />
         <span className="text-[14px] font-semibold">{displayName(root)}</span>
+        {live && (
+          <span className="inline-flex items-center gap-1.5 rounded-md border border-line px-1.5 py-px font-mono text-[10px] text-muted">
+            <span className="h-[5px] w-[5px] animate-pulse rounded-full bg-bar" />
+            live
+          </span>
+        )}
       </span>
       <span className="flex gap-3.5 font-mono text-[11.5px] text-muted tabular-nums">
         <span>
@@ -394,24 +478,23 @@ export const heatFill = (
 ): string => HEAT_FILL[heatLevel(span, self, total, maxSelf)];
 
 function SpanRow({
-  span,
-  depth,
-  kids,
+  row,
   root,
   total,
   maxSelf,
   selected,
   onSelect,
+  onToggleCollapsed,
 }: {
-  span: SpanRecord;
-  depth: number;
-  kids: SpanRecord[];
+  row: Extract<TraceRow, { type: "span" }>;
   root: SpanRecord;
   total: number;
   maxSelf: number;
   selected: boolean;
   onSelect: (id: string) => void;
+  onToggleCollapsed: (id: string) => void;
 }) {
+  const { span, depth, children: kids, hasChildren, collapsed, hiddenCount } = row;
   const ref = useRef<HTMLButtonElement>(null);
   const container = usePortalContainer();
   useEffect(() => {
@@ -443,6 +526,26 @@ function SpanRow({
         }
       >
         <span className="flex min-w-0 items-center gap-1.5" style={{ paddingLeft: depth * 15 }}>
+          {/* A span, not a button: this row is already one, and nesting is invalid.
+              h/l carry the keyboard half of the affordance. */}
+          <span
+            role={hasChildren ? "button" : undefined}
+            aria-label={hasChildren ? (collapsed ? "Expand" : "Collapse") : undefined}
+            aria-expanded={hasChildren ? !collapsed : undefined}
+            onClick={
+              hasChildren
+                ? (e) => {
+                    e.stopPropagation();
+                    onToggleCollapsed(span.id);
+                  }
+                : undefined
+            }
+            className={`-ml-0.5 flex h-3.5 w-3.5 flex-none items-center justify-center rounded-[3px] ${
+              hasChildren ? "text-faint hover:bg-raised hover:text-fg" : "opacity-0"
+            }`}
+          >
+            {collapsed ? <CaretRight size={9} /> : <CaretDown size={9} />}
+          </span>
           <span
             className={`flex-none rounded-[3px] border border-line bg-panel px-1 py-px font-mono text-[9px] tracking-wide uppercase ${
               span.kind === "llm" || span.kind === "agent"
@@ -461,6 +564,11 @@ function SpanRow({
           </span>
           {span.status === "error" && (
             <XCircle size={12} className="flex-none text-err" aria-label="failed" />
+          )}
+          {collapsed && hiddenCount > 0 && (
+            <span className="flex-none rounded-[3px] bg-raised px-1 font-mono text-[9.5px] text-faint tabular-nums">
+              +{hiddenCount}
+            </span>
           )}
         </span>
 
@@ -517,6 +625,190 @@ function SpanRow({
   );
 }
 
+const NAME_COL = 250;
+/** Room per step, so a run of many short calls stays legible instead of
+ * collapsing into a stack of hairlines. The pane scrolls to reach the rest. */
+const PX_PER_ROW = 64;
+const MIN_CANVAS = 1200;
+
+/**
+ * The run as wall-clock lanes: one row per step in the order it started, drawn
+ * against a time axis wide enough to scroll. A tree groups a step with its
+ * parent, which hides concurrency; here two steps that overlap in time sit
+ * directly above each other with overlapping bars, so parallel work is visible
+ * at a glance.
+ */
+function Timeline({
+  rows,
+  root,
+  total,
+  maxSelf,
+  selectedId,
+  onSelect,
+}: {
+  rows: TraceRow[];
+  root: SpanRecord;
+  total: number;
+  maxSelf: number;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const spans = rows.flatMap((r) => (r.type === "span" ? [r] : []));
+  const width = Math.max(MIN_CANVAS, spans.length * PX_PER_ROW);
+  const origin = spans.reduce((min, r) => Math.min(min, r.span.startTime), root.startTime);
+  const ticks = Math.max(4, Math.round(width / 180));
+
+  return (
+    <div className="min-h-0 flex-1 overflow-auto">
+      <div style={{ width: NAME_COL + width }}>
+        <div className="sticky top-0 z-20 flex border-b border-line bg-plate">
+          <div className="sticky left-0 z-10 flex-none bg-plate" style={{ width: NAME_COL }} />
+          <div className="relative h-[17px] flex-none" style={{ width }}>
+            {Array.from({ length: ticks + 1 }, (_, i) => (
+              <span
+                key={i}
+                className={`absolute top-0.5 font-mono text-[9.5px] text-faint tabular-nums ${
+                  i === 0 ? "pl-1" : "-translate-x-full pr-1.5"
+                }`}
+                style={{ left: `${(i / ticks) * 100}%` }}
+              >
+                {fmtMs(Math.round((total / ticks) * i))}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="pb-4">
+          {spans.map((row) => (
+            <TimelineRow
+              key={row.span.id}
+              span={row.span}
+              kids={row.children}
+              origin={origin}
+              total={total}
+              maxSelf={maxSelf}
+              width={width}
+              ticks={ticks}
+              selected={selectedId === row.span.id}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TimelineRow({
+  span,
+  kids,
+  origin,
+  total,
+  maxSelf,
+  width,
+  ticks,
+  selected,
+  onSelect,
+}: {
+  span: SpanRecord;
+  kids: SpanRecord[];
+  origin: number;
+  total: number;
+  maxSelf: number;
+  width: number;
+  ticks: number;
+  selected: boolean;
+  onSelect: (id: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (selected) ref.current?.scrollIntoView({ block: "nearest" });
+  }, [selected]);
+
+  const ms = extent(span);
+  const self = selfTime(span, kids);
+  const left = ((span.startTime - origin) / total) * width;
+  const barWidth = Math.max((ms / total) * width, 2);
+  const heat = heatFill(span, self, total, maxSelf);
+  const gaps = selfIntervals(span, kids);
+  const labelOnLeft = left + barWidth > width - 90;
+
+  return (
+    <div
+      ref={ref}
+      role="button"
+      tabIndex={-1}
+      aria-selected={selected}
+      onClick={() => onSelect(span.id)}
+      // Opaque tones throughout: the name column sticks over the bars and
+      // inherits this background, so a translucent one would let them show.
+      className={`flex items-center ${selected ? "bg-raised" : "bg-canvas hover:bg-plate"}`}
+    >
+      <div
+        className="sticky left-0 z-10 flex flex-none items-center gap-1.5 bg-inherit py-[3px] pr-2 pl-3"
+        style={{ width: NAME_COL }}
+      >
+        <span
+          className={`flex-none rounded-[3px] border border-line bg-panel px-1 py-px font-mono text-[9px] tracking-wide uppercase ${
+            span.kind === "llm" || span.kind === "agent"
+              ? "border-line-strong text-fg"
+              : "text-faint"
+          }`}
+        >
+          {span.kind}
+        </span>
+        <span
+          className={`truncate text-[12.5px] ${span.status === "error" ? "text-err" : ""} ${
+            span.kind === "agent" ? "font-semibold" : ""
+          }`}
+        >
+          {displayName(span)}
+        </span>
+        {span.status === "error" && (
+          <XCircle size={12} className="flex-none text-err" aria-label="failed" />
+        )}
+      </div>
+
+      <div className="relative h-[21px] flex-none" style={{ width }}>
+        {Array.from({ length: ticks - 1 }, (_, i) => (
+          <span
+            key={i}
+            aria-hidden
+            className="absolute top-0 bottom-0 w-px bg-line"
+            style={{ left: `${((i + 1) / ticks) * 100}%` }}
+          />
+        ))}
+        <span
+          className="absolute top-[6px] h-[9px] rounded-[2px] border border-line-strong"
+          style={{ left, width: barWidth }}
+        >
+          {gaps.map(([a, b], i) => (
+            <span
+              key={i}
+              className={`absolute top-0 bottom-0 min-w-[1.5px] rounded-[1px] ${heat}`}
+              style={{
+                left: `${((a - span.startTime) / (ms || 1)) * 100}%`,
+                width: `${((b - a) / (ms || 1)) * 100}%`,
+              }}
+            />
+          ))}
+        </span>
+        <span
+          className="absolute top-[5px] font-mono text-[10px] whitespace-nowrap text-faint tabular-nums"
+          style={
+            labelOnLeft
+              ? { right: width - left, paddingRight: 7 }
+              : { left: left + barWidth, paddingLeft: 7 }
+          }
+        >
+          {fmtMs(ms)}
+          {span.model ? ` · ${span.model}` : ""}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function MinorRow({
   row,
   open,
@@ -540,7 +832,7 @@ function MinorRow({
   );
 }
 
-function Legend() {
+function Legend({ timeline }: { timeline: boolean }) {
   return (
     <div className="flex flex-wrap items-center gap-4 border-t border-line px-4 py-2 text-[11px] text-faint">
       <span className="flex items-center gap-1.5">
@@ -555,6 +847,12 @@ function Legend() {
       <span className="ml-auto flex items-center gap-1">
         <Key>j</Key>
         <Key>k</Key> move
+        {!timeline && (
+          <>
+            <Key>h</Key>
+            <Key>l</Key> fold
+          </>
+        )}
         <Key>e</Key> error
         <Key>s</Key> slowest
       </span>

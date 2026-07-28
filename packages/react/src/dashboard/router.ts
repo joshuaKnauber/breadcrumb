@@ -19,7 +19,7 @@ export interface Route {
    * filtered when shared, and switching pages keeps the scope.
    */
   env?: string;
-  view?: "flow" | "full";
+  view?: "flow" | "full" | "timeline";
 }
 
 export const HOME: Route = { page: "sessions" };
@@ -31,7 +31,9 @@ export const HOME: Route = { page: "sessions" };
 export function parseRoute(pathname: string, search = "", custom: string[] = []): Route {
   const params = new URLSearchParams(search);
   const env = params.get("env") || undefined;
-  const view = params.get("view") === "full" ? "full" : undefined;
+  // Flow is the default, so it stays out of the URL.
+  const requested = params.get("view");
+  const view = requested === "full" || requested === "timeline" ? requested : undefined;
   const path = pathname.replace(/\/+$/, "") || "/";
 
   const trace = path.match(/^\/sessions\/([^/]+)\/traces\/([^/]+)$/);
@@ -66,7 +68,7 @@ export function routePath(route: Route): string {
 
   const params = new URLSearchParams();
   if (route.env) params.set("env", route.env);
-  if (route.page === "trace" && route.view === "full") params.set("view", "full");
+  if (route.page === "trace" && route.view && route.view !== "flow") params.set("view", route.view);
   const query = params.toString();
   return query ? `${path}?${query}` : path;
 }

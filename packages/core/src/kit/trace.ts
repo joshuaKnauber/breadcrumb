@@ -1,5 +1,15 @@
 import type { SpanRecord } from "../db/types.js";
-import { flowRows, fullRows, hotspots, rootSpans, selfTime, traceExtent, type Hotspots } from "./tree.js";
+import {
+  flowRows,
+  fullRows,
+  hotspots,
+  rootSpans,
+  selfTime,
+  timelineRows,
+  traceExtent,
+  type FlowRow,
+  type Hotspots,
+} from "./tree.js";
 
 /**
  * Everything the waterfall needs to render that isn't markup: the flattened
@@ -8,14 +18,24 @@ import { flowRows, fullRows, hotspots, rootSpans, selfTime, traceExtent, type Ho
  * UI built from scratch — both read identical numbers off it.
  */
 
-export type TraceViewMode = "flow" | "full";
+export type TraceViewMode = "flow" | "full" | "timeline";
 
 export const extent = (span: SpanRecord): number =>
   (span.endTime ?? span.startTime) - span.startTime;
 
 /** A row as it appears on screen, with expanded minor groups already spliced in. */
 export type TraceRow =
-  | { type: "span"; span: SpanRecord; depth: number; children: SpanRecord[] }
+  | {
+      type: "span";
+      span: SpanRecord;
+      depth: number;
+      children: SpanRecord[];
+      /** Whether this row has rows nested under it — i.e. it can be collapsed. */
+      hasChildren: boolean;
+      collapsed: boolean;
+      /** Rows hidden underneath, at any depth. 0 unless collapsed. */
+      hiddenCount: number;
+    }
   | { type: "minor"; parentId: string; spans: SpanRecord[]; depth: number; open: boolean };
 
 export interface TraceTotals {
@@ -46,12 +66,40 @@ export interface TraceModel {
 
 const NO_OPEN: ReadonlySet<string> = new Set();
 
+const ROWS_FOR: Record<TraceViewMode, (spans: SpanRecord[]) => FlowRow[]> = {
+  flow: flowRows,
+  full: fullRows,
+  timeline: timelineRows,
+};
+
+/**
+ * Ids to collapse when a trace first opens: every row below the top level that
+ * has rows under it. A run then reads as its roots and the steps they ran, with
+ * depth one click away rather than fifty rows deep on arrival.
+ */
+export function defaultCollapsed(spans: SpanRecord[], mode: TraceViewMode = "flow"): Set<string> {
+  const source = ROWS_FOR[mode](spans);
+  const out = new Set<string>();
+  for (const [i, row] of source.entries()) {
+    if (row.type !== "span" || row.depth < 1) continue;
+    const next = source[i + 1];
+    if (next !== undefined && next.depth > row.depth) out.add(row.span.id);
+  }
+  return out;
+}
+
 export function traceModel(
   spans: SpanRecord[],
-  options: { mode?: TraceViewMode; openMinor?: ReadonlySet<string> } = {}
+  options: {
+    mode?: TraceViewMode;
+    openMinor?: ReadonlySet<string>;
+    /** Span ids whose descendants are hidden. See `defaultCollapsed`. */
+    collapsed?: ReadonlySet<string>;
+  } = {}
 ): TraceModel {
   const mode = options.mode ?? "flow";
   const openMinor = options.openMinor ?? NO_OPEN;
+  const collapsed = options.collapsed ?? NO_OPEN;
 
   const byId = new Map(spans.map((s) => [s.id, s]));
   const childrenById = new Map<string, SpanRecord[]>();
@@ -76,22 +124,55 @@ export function traceModel(
     maxSelf = Math.max(maxSelf, selfTime(s, kidsOf(s.id)));
   }
 
-  const source = spans.length === 0 ? [] : mode === "flow" ? flowRows(spans) : fullRows(spans);
-  const rows: TraceRow[] = [];
-  const order: string[] = [];
+  const source = spans.length === 0 ? [] : ROWS_FOR[mode](spans);
+
+  // Minor groups splice in first, so collapsing sees the same rows the reader
+  // does. Collapsing then hides whole subtrees by depth, which works for the
+  // folded flow view too, where a row's parent isn't always its span's parent.
+  const expanded: TraceRow[] = [];
   for (const row of source) {
     if (row.type === "span") {
-      rows.push({ type: "span", span: row.span, depth: row.depth, children: row.children });
-      order.push(row.span.id);
+      expanded.push({ ...row, hasChildren: false, collapsed: false, hiddenCount: 0 });
       continue;
     }
     const open = openMinor.has(row.parentId);
-    rows.push({ type: "minor", parentId: row.parentId, spans: row.spans, depth: row.depth, open });
+    expanded.push({ type: "minor", parentId: row.parentId, spans: row.spans, depth: row.depth, open });
     if (!open) continue;
     for (const s of row.spans) {
-      rows.push({ type: "span", span: s, depth: row.depth, children: [] });
-      order.push(s.id);
+      expanded.push({
+        type: "span",
+        span: s,
+        depth: row.depth,
+        children: [],
+        hasChildren: false,
+        collapsed: false,
+        hiddenCount: 0,
+      });
     }
+  }
+
+  const rows: TraceRow[] = [];
+  const order: string[] = [];
+  let hidingUnder: { depth: number; row: Extract<TraceRow, { type: "span" }> } | null = null;
+  for (const [i, row] of expanded.entries()) {
+    if (hidingUnder && row.depth > hidingUnder.depth) {
+      hidingUnder.row.hiddenCount++;
+      continue;
+    }
+    hidingUnder = null;
+    if (row.type === "minor") {
+      rows.push(row);
+      continue;
+    }
+    const next = expanded[i + 1];
+    const visible: Extract<TraceRow, { type: "span" }> = {
+      ...row,
+      hasChildren: next !== undefined && next.depth > row.depth,
+    };
+    visible.collapsed = visible.hasChildren && collapsed.has(row.span.id);
+    rows.push(visible);
+    order.push(row.span.id);
+    if (visible.collapsed) hidingUnder = { depth: row.depth, row: visible };
   }
 
   let cost = 0;

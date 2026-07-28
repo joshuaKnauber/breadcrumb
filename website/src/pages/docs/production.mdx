@@ -142,7 +142,9 @@ breadcrumb({
 
 Prompts and outputs are stored as captured. To scrub PII or trim large payloads
 before they're written, use `redact` and `maxPayloadChars`. Both run on every
-span from every path.
+span from every path. Capping shortens the strings inside a payload rather than
+flattening the whole thing, so a trimmed conversation still reads as a
+conversation in the dashboard.
 
 ```ts
 breadcrumb({

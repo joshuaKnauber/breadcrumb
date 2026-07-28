@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  defaultCollapsed,
   defaultSelection,
   heatLevel,
   keyboardTarget,
@@ -98,6 +99,73 @@ describe("traceModel", () => {
     const model = traceModel(trace);
     expect(model.childrenById.get("st1")?.map((s) => s.id)).toEqual(["ds1"]);
     expect(model.childrenById.has("ds1")).toBe(false);
+  });
+});
+
+/** A nested run: the agent delegates to a sub-agent that runs its own steps. */
+const nested: SpanRecord[] = [
+  span({ id: "root", name: "support-reply", kind: "agent", startTime: 0, endTime: 900 }),
+  span({ id: "sub", parentSpanId: "root", name: "research", kind: "agent", startTime: 10, endTime: 600 }),
+  span({ id: "s1", parentSpanId: "sub", name: "search", kind: "tool", startTime: 20, endTime: 300, cost: 0.001 }),
+  span({ id: "s2", parentSpanId: "sub", name: "rank", kind: "llm", startTime: 310, endTime: 590, cost: 0.002 }),
+  span({ id: "reply", parentSpanId: "root", name: "reply", kind: "llm", startTime: 610, endTime: 900, cost: 0.003 }),
+];
+
+describe("collapsing", () => {
+  it("hides a collapsed row's whole subtree and counts what it hid", () => {
+    const model = traceModel(nested, { collapsed: new Set(["sub"]) });
+    expect(rowIds(model)).toEqual(["root", "sub", "reply"]);
+    // Hidden rows are no longer keyboard stops either.
+    expect(model.order).toEqual(["root", "sub", "reply"]);
+
+    const sub = model.rows.find((r) => r.type === "span" && r.span.id === "sub");
+    expect(sub).toMatchObject({ collapsed: true, hasChildren: true, hiddenCount: 2 });
+  });
+
+  it("marks which rows can be collapsed at all", () => {
+    const model = traceModel(nested);
+    const flags = model.rows.flatMap((r) => (r.type === "span" ? [[r.span.id, r.hasChildren]] : []));
+    expect(flags).toEqual([
+      ["root", true],
+      ["sub", true],
+      ["s1", false],
+      ["s2", false],
+      ["reply", false],
+    ]);
+  });
+
+  it("collapses everything below the top level by default", () => {
+    const collapsed = defaultCollapsed(nested);
+    expect([...collapsed]).toEqual(["sub"]);
+    // The root stays open, so a run opens on its top-level steps.
+    expect(rowIds(traceModel(nested, { collapsed }))).toEqual(["root", "sub", "reply"]);
+  });
+});
+
+describe("timelineRows", () => {
+  it("orders every step by when it ran, flat", () => {
+    const model = traceModel(nested, { mode: "timeline" });
+    expect(rowIds(model)).toEqual(["root", "sub", "s1", "s2", "reply"]);
+    expect(model.rows.every((r) => r.type === "span" && r.depth === 0)).toBe(true);
+  });
+
+  it("interleaves branches that ran at the same time", () => {
+    // Two sub-agents running concurrently: a tree would group them by parent.
+    const parallel = [
+      span({ id: "root", name: "fanout", kind: "agent", startTime: 0, endTime: 400 }),
+      span({ id: "a", parentSpanId: "root", name: "a", kind: "agent", startTime: 10, endTime: 300 }),
+      span({ id: "b", parentSpanId: "root", name: "b", kind: "agent", startTime: 20, endTime: 380 }),
+      span({ id: "a1", parentSpanId: "a", name: "a1", kind: "tool", startTime: 30, endTime: 290, cost: 0.1 }),
+      span({ id: "b1", parentSpanId: "b", name: "b1", kind: "tool", startTime: 25, endTime: 370, cost: 0.1 }),
+    ];
+    expect(rowIds(traceModel(parallel, { mode: "timeline" }))).toEqual([
+      "root",
+      "a",
+      "b",
+      "b1",
+      "a1",
+    ]);
+    expect(rowIds(traceModel(parallel, { mode: "full" }))).toEqual(["root", "a", "a1", "b", "b1"]);
   });
 });
 

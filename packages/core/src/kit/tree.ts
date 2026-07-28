@@ -65,6 +65,18 @@ export function traceExtent(spans: SpanRecord[]): number {
   return end > start ? end - start : 1;
 }
 
+/**
+ * When the run last did anything, as a wall-clock timestamp. A trace that ended
+ * seconds ago is probably still being written to — spans are only stored once
+ * they end, so an in-flight run arrives a piece at a time — which is what tells
+ * a UI whether it's worth polling for more.
+ */
+export function lastActivity(spans: SpanRecord[]): number {
+  let last = 0;
+  for (const s of spans) last = Math.max(last, s.endTime ?? s.startTime);
+  return last;
+}
+
 /** A row in the denoised flow view: a span, or a tucked-away run of trivia. */
 export type FlowRow =
   | { type: "span"; span: SpanRecord; depth: number; children: SpanRecord[] }
@@ -139,6 +151,29 @@ export function fullRows(spans: SpanRecord[]): FlowRow[] {
   };
   walk(null, 0);
   return out;
+}
+
+/**
+ * Flat rows in the order the work actually happened. A tree groups a span with
+ * its parent, which buries the fact that two branches ran at the same time;
+ * sorting the denoised set by start time puts concurrent steps side by side,
+ * which is the whole point of reading a run on a timeline.
+ */
+export function timelineRows(spans: SpanRecord[]): FlowRow[] {
+  const byParent = groupByParent(spans);
+  const flat: SpanRecord[] = [];
+  for (const row of flowRows(spans)) {
+    if (row.type === "span") flat.push(row.span);
+    else flat.push(...row.spans);
+  }
+  return flat
+    .sort((a, b) => a.startTime - b.startTime || (b.endTime ?? 0) - (a.endTime ?? 0))
+    .map((span) => ({
+      type: "span" as const,
+      span,
+      depth: 0,
+      children: byParent.get(span.id) ?? [],
+    }));
 }
 
 /**

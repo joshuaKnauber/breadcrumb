@@ -1,10 +1,67 @@
 ---
 layout: ../../../layouts/DocsLayout.astro
 title: OpenTelemetry
-description: Ingest traces over HTTP from other services with OTLP or plain JSON.
+description: Register Breadcrumb's span processor on your own tracer provider, or ingest traces over HTTP with OTLP or plain JSON.
 ---
 
 # OpenTelemetry
+
+Breadcrumb is an OpenTelemetry consumer, so it fits an app that already has
+tracing: register its span processor on your provider, or send spans over HTTP
+from a service running somewhere else.
+
+## Your own tracer provider
+
+If you already set up OpenTelemetry — `@vercel/otel`, a `NodeSDK`, Sentry —
+register `bc.spanProcessor` and model spans reach Breadcrumb from the tracer you
+already have:
+
+```ts
+// instrumentation.ts
+import { registerOTel } from "@vercel/otel";
+import { bc } from "./breadcrumb";
+
+export function register() {
+  registerOTel({ serviceName: "app", spanProcessors: [bc.spanProcessor] });
+}
+```
+
+Calls then need no Breadcrumb-specific wiring — the AI SDK's own telemetry flag
+is enough, and `functionId` still names the call and carries its cost:
+
+```ts
+const { text } = await generateText({
+  model: openai("gpt-5"),
+  prompt,
+  experimental_telemetry: { isEnabled: true, functionId: "generate-answer" },
+});
+```
+
+`bc.telemetry()` keeps working alongside it and pins Breadcrumb's own tracer, so
+a span goes to one provider or the other, never both — no duplicate rows. Context
+propagation is global either way, so a call made inside a `bc.trace()` callback
+still nests into that trace.
+
+### What gets stored
+
+On a shared provider the processor sees every span in the app, including HTTP,
+database, and filesystem instrumentation. By default it keeps only the spans
+Breadcrumb can read — those carrying `ai.*`, `gen_ai.*`, or `breadcrumb.*`
+attributes — so registering it doesn't turn your trace table into a general span
+dump. `shouldExport` replaces that rule when you want your own spans stored too:
+
+```ts
+breadcrumb({
+  // …
+  shouldExport: (span) => span.instrumentationScope.name !== "@opentelemetry/instrumentation-fs",
+});
+```
+
+Whatever you filter, the spans that survive still read correctly: a call keeps
+its `functionId` name and cost attribution wherever it sits, and a trace missing
+the span above it renders as a partial trace rather than falling apart.
+
+## Ingesting over HTTP
 
 For services outside your main process, Breadcrumb accepts traces over HTTP.
 Enable the ingest endpoints with an API key, then point any OTLP/HTTP exporter at

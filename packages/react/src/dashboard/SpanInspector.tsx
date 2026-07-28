@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { CaretDown, CaretRight } from "./ui/icons.js";
 import { fmtCost, fmtMs } from "@breadcrumb-sh/core/kit";
 import type { SpanRecord } from "@breadcrumb-sh/core/client";
 import { asMessages, displayName, selfTime } from "@breadcrumb-sh/core/kit";
 import { heatFill as heat } from "./TraceView.js";
+import { JsonView } from "./ui/JsonView.js";
 import { ToggleGroup } from "./ui/ToggleGroup.js";
 
 const MODES = [
@@ -12,9 +13,9 @@ const MODES = [
 ];
 
 /**
- * Outputs are what you judge; inputs are what you debug. The response leads at
- * reading size and the prompt collapses to one labelled row, so the common case
- * costs no scrolling and the debugging case costs one click.
+ * A step reads in the order it ran: what went in, then what came back. Both are
+ * open on arrival — a tool call's arguments are the reason you clicked it — and
+ * each section folds away when it's the other one you're chasing.
  */
 export function SpanInspector({
   span,
@@ -28,13 +29,9 @@ export function SpanInspector({
   maxSelf: number;
 }) {
   const [raw, setRaw] = useState(false);
-  const [inputOpen, setInputOpen] = useState(false);
 
-  // A new selection is a fresh question: collapse back to the output.
-  useEffect(() => {
-    setInputOpen(false);
-    setRaw(false);
-  }, [span.id]);
+  // A new selection is a fresh question: back to the rendered view.
+  useEffect(() => setRaw(false), [span.id]);
 
   const ms = (span.endTime ?? span.startTime) - span.startTime;
   const self = selfTime(span, kids);
@@ -61,9 +58,14 @@ export function SpanInspector({
     ? `${messages.length} ${messages.length === 1 ? "message" : "messages"}${
         span.inputTokens != null ? ` · ${fmtNum(span.inputTokens)} tok` : ""
       }${tokenParts.length ? ` · ${tokenParts.join(", ")}` : ""}`
-    : span.input !== undefined && span.input !== null
-      ? describePayload(span.input)
-      : null;
+    : describePayload(span.input);
+
+  // A trailing assistant turn in the input array is the response for SDKs that
+  // round-trip the whole conversation.
+  const trailing = messages?.at(-1);
+  const output =
+    span.output ??
+    (trailing?.role === "assistant" ? trailing.text : undefined);
 
   return (
     <div className="px-4 pt-3.5 pb-6">
@@ -107,76 +109,77 @@ export function SpanInspector({
         </>
       ) : (
         <>
-          <Output span={span} messages={messages} />
-          {inputSummary && (
-            <>
-              <button
-                onClick={() => setInputOpen((v) => !v)}
-                aria-expanded={inputOpen}
-                className="flex w-full items-center gap-2.5 rounded-md border border-line bg-panel px-3 py-1.5 text-muted hover:border-line-strong hover:text-fg"
-              >
-                <span className="font-mono text-[9.5px] tracking-[0.14em] text-faint uppercase">
-                  input
-                </span>
-                <span className="truncate font-mono text-[11px] tabular-nums">{inputSummary}</span>
-                <span className="ml-auto text-faint">
-                  {inputOpen ? <CaretDown size={10} /> : <CaretRight size={10} />}
-                </span>
-              </button>
-              {inputOpen && (
-                <div className="mt-2">
-                  {messages ? (
-                    messages.map((m, i) => <Message key={i} role={m.role} text={m.text} />)
-                  ) : (
-                    <Payload label="input" value={span.input} />
-                  )}
-                </div>
-              )}
-            </>
-          )}
+          <Section label="input" summary={inputSummary}>
+            {messages ? (
+              messages.map((m, i) => <Message key={i} role={m.role} text={m.text} />)
+            ) : (
+              <Rendered value={span.input} />
+            )}
+          </Section>
+          <Section label="output" summary={describePayload(output)}>
+            <Rendered value={output} prose />
+          </Section>
         </>
       )}
     </div>
   );
 }
 
-function Output({
-  span,
-  messages,
+function Section({
+  label,
+  summary,
+  children,
 }: {
-  span: SpanRecord;
-  messages: ReturnType<typeof asMessages>;
+  label: string;
+  summary: string | null;
+  children: ReactNode;
 }) {
-  // A trailing assistant turn in the input array is the response for SDKs that
-  // round-trip the whole conversation.
-  const trailing = messages?.at(-1);
-  const fromMessages =
-    span.output === undefined || span.output === null
-      ? trailing?.role === "assistant"
-        ? trailing.text
-        : null
-      : null;
-
-  const value = fromMessages ?? span.output;
-  if (value === undefined || value === null) {
-    return <div className="mb-3 text-[12.5px] text-faint">No output recorded for this step.</div>;
+  const [open, setOpen] = useState(true);
+  if (summary === null) {
+    return (
+      <div className="mb-3.5">
+        <SectionLabel>{label}</SectionLabel>
+        <div className="text-[12.5px] text-faint">Nothing recorded for this step.</div>
+      </div>
+    );
   }
-
-  const text = typeof value === "string" ? value : null;
   return (
     <div className="mb-3.5">
-      <span className="mb-1.5 block font-mono text-[9.5px] tracking-[0.14em] text-faint uppercase">
-        output
-      </span>
-      {text !== null ? (
-        <div className="text-[13.5px] leading-[1.65] whitespace-pre-wrap">{text}</div>
-      ) : (
-        <div className="overflow-x-auto rounded-md border border-line bg-panel px-3 py-2.5 font-mono text-[12px] whitespace-pre text-muted">
-          {JSON.stringify(value, null, 1)}
-        </div>
-      )}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="mb-1.5 flex w-full items-center gap-2 text-faint hover:text-fg"
+      >
+        <SectionLabel>{label}</SectionLabel>
+        <span className="truncate font-mono text-[10.5px] tabular-nums">{summary}</span>
+        <span className="ml-auto">{open ? <CaretDown size={10} /> : <CaretRight size={10} />}</span>
+      </button>
+      {open && children}
     </div>
   );
+}
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <span className="font-mono text-[9.5px] tracking-[0.14em] text-faint uppercase">{children}</span>
+  );
+}
+
+/** Strings read as text; anything structured gets the browsable tree. */
+function Rendered({ value, prose = false }: { value: unknown; prose?: boolean }) {
+  if (value === undefined || value === null) return null;
+  if (typeof value === "string") {
+    return (
+      <div
+        className={`whitespace-pre-wrap ${
+          prose ? "text-[13.5px] leading-[1.65]" : "text-[12.5px] leading-[1.6] text-muted"
+        }`}
+      >
+        {value}
+      </div>
+    );
+  }
+  return <JsonView value={value} />;
 }
 
 function Message({ role, text }: { role: string; text: string }) {
@@ -218,10 +221,12 @@ function fmtNum(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
 
-function describePayload(value: unknown): string {
+/** null means nothing was recorded — the section says so instead of rendering. */
+function describePayload(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
   if (typeof value === "string") return `${value.length} chars`;
   if (Array.isArray(value)) return `${value.length} items`;
-  if (typeof value === "object" && value !== null) {
+  if (typeof value === "object") {
     const n = Object.keys(value).length;
     return `${n} ${n === 1 ? "field" : "fields"}`;
   }

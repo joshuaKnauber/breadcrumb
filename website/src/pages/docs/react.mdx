@@ -91,6 +91,23 @@ const chat = asMessages(span.input);  // detect + parse chat-shaped payloads
 fmtCost(0.0042);                      // "$0.0042"
 ```
 
+`mode` picks the shape: `"flow"` (denoised, the default), `"full"` (every span),
+or `"timeline"` (flat, ordered by start time, so concurrent steps sit next to
+each other). Pass `collapsed` — a set of span ids — to fold subtrees away, and
+seed it from `defaultCollapsed(spans, mode)` for the folded-by-default reading
+the dashboard uses. Each row reports `hasChildren`, `collapsed`, and
+`hiddenCount` so you can draw the affordance.
+
+```ts
+import { defaultCollapsed, lastActivity, traceModel } from "@breadcrumb-sh/core/kit";
+
+const [collapsed, setCollapsed] = useState(() => defaultCollapsed(spans));
+const model = traceModel(spans, { mode: "timeline", collapsed });
+
+// Spans are stored as they end, so a run still writing is worth polling for.
+const running = Date.now() - lastActivity(spans) < 30_000;
+```
+
 `traceModel` is what the shipped waterfall renders from, so a UI you build from
 scratch reads exactly the same numbers rather than reimplementing them.
 

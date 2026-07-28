@@ -31,6 +31,12 @@ conversation; anything else goes in `metadata`.
 Usage is counted once per model call, even across multi-step tool loops — the
 outer wrapper spans the SDK emits are treated as duplicates, not double-counted.
 
+## If you already have OpenTelemetry
+
+Apps with their own tracer provider can skip `bc.telemetry()` entirely: register
+[`bc.spanProcessor`](/docs/instrumenting/opentelemetry/) once and plain
+`{ isEnabled: true, functionId }` is enough.
+
 ## Next steps
 
 - [Cost & tokens](/docs/cost/): turn token usage into cost.

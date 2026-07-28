@@ -75,6 +75,18 @@ const { text } = await generateText({
 `functionId` names the call and carries the cost attribution, wherever the call
 sits in the trace; `userId` and `sessionId` group runs by user and conversation.
 
+**Your own OpenTelemetry setup.** If the app already has a tracer provider
+(`@vercel/otel`, `NodeSDK`, Sentry), register `bc.spanProcessor` on it and model
+spans reach breadcrumb without threading `bc.telemetry()` through every call:
+
+```ts
+registerOTel({ serviceName: "app", spanProcessors: [bc.spanProcessor] });
+```
+
+It stores only spans breadcrumb can read (`ai.*`, `gen_ai.*`, `breadcrumb.*`)
+unless `shouldExport` says otherwise, so a shared provider's HTTP and filesystem
+spans don't land in the trace table.
+
 **Manual tracing.** `bc.trace(name, attrs?, fn)`, with nested `t.span(...)`:
 
 ```ts

@@ -14,8 +14,8 @@ tracing.
   `generateText` / `streamText` calls.
 - [Manual tracing](/docs/instrumenting/manual/) — wrap any code in
   `bc.trace()` and nest spans.
-- [OpenTelemetry](/docs/instrumenting/opentelemetry/) — ingest traces over HTTP
-  from other services.
+- [OpenTelemetry](/docs/instrumenting/opentelemetry/) — register a span processor
+  on your own tracer provider, or ingest traces over HTTP from other services.
 
 The AI SDK and manual APIs compose: calls made inside a `bc.trace()` callback
 nest into that trace automatically.

@@ -36,7 +36,8 @@ const bc = breadcrumb({
 | `pricing` | `Record<string, ModelPrice>` | Your per-model prices (USD per 1M tokens). Breadcrumb ships no prices — omit and cost stays whatever you set explicitly. |
 | `retention` | `RetentionOptions` | Per-environment windows. Bounded sweeps piggyback on ingest; no cron needed. |
 | `redact` | `(span) => span \| void` | Scrub PII or trim payloads before storage. Runs on every span from every path. |
-| `maxPayloadChars` | `number` | Caps captured input/output size. Default `16384`; `0` disables. |
+| `maxPayloadChars` | `number` | Caps captured input/output size. Default `16384`; `0` disables. The budget is spent on the long strings inside a payload, so a capped message array is still an array of messages. |
+| `shouldExport` | `(span: ReadableSpan) => boolean` | Filters what [`bc.spanProcessor`](/docs/instrumenting/opentelemetry/) keeps when registered on your own tracer provider. Default: spans carrying `ai.*`, `gen_ai.*`, or `breadcrumb.*`. |
 | `flushMode` | `"batch" \| "sync"` | `"batch"` (default) buffers and exports every ~2s. `"sync"` exports each span as it ends — for serverless/edge. |
 | `migrations` | `"auto" \| "manual"` | `"auto"` (default) creates the schema on first use. `"manual"` never runs DDL at runtime — you apply migrations yourself. See [Migrations](/docs/migrations/). |
 | `mcp` | `{ name?, hidePayloads? }` | Tunes the MCP endpoint your coding agent connects to. Always mounted; unreachable until someone creates a key. See [MCP](/docs/mcp/). |
