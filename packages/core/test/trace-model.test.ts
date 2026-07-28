@@ -95,6 +95,19 @@ describe("traceModel", () => {
     expect(model.total).toBe(200); // the whole run, not just the first subtree
   });
 
+  it("measures bars from the earliest span, not the first root", () => {
+    // A genuine root outranks an orphan for naming even when the orphan started
+    // first — but the bars are drawn from real time, or the orphan lands off
+    // the left of the track at a negative offset.
+    const model = traceModel([
+      span({ id: "root", name: "run", startTime: 1000, endTime: 2000 }),
+      span({ id: "orphan", parentSpanId: "gone", name: "earlier", startTime: 500, endTime: 800 }),
+    ]);
+    expect(model.roots[0]!.id).toBe("root");
+    expect(model.origin).toBe(500);
+    expect(model.total).toBe(1500);
+  });
+
   it("indexes children by parent, ignoring parents outside the set", () => {
     const model = traceModel(trace);
     expect(model.childrenById.get("st1")?.map((s) => s.id)).toEqual(["ds1"]);

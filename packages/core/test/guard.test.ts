@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import Database from "better-sqlite3";
 import { breadcrumb } from "../src/index.js";
 import { sqlite } from "../src/adapters/index.js";
+import { capPayload } from "../src/sanitize.js";
 
 function firstSpan(bc: ReturnType<typeof breadcrumb>) {
   return bc.api.listTraces().then(({ items }) => bc.api.getTrace({ id: items[0]!.traceId })).then((s) => s[0]!);
@@ -21,8 +22,19 @@ describe("payload guarding", () => {
 
     const root = await firstSpan(bc);
     expect(String(root.input)).toContain("truncated");
-    expect(String(root.input).length).toBeLessThan(120);
     expect(String(root.output)).toContain("truncated");
+    // The marker comes out of the budget, not on top of it.
+    expect(String(root.input).length).toBeLessThanOrEqual(50);
+  });
+
+  it("never returns more than it was given", async () => {
+    // A payload just over the line used to come back longer than the original,
+    // because the marker was appended after slicing to the full budget.
+    for (const [len, cap] of [[101, 100], [60, 50], [5000, 4096]] as const) {
+      const capped = capPayload("a".repeat(len), cap) as string;
+      expect(capped.length).toBeLessThanOrEqual(cap);
+      expect(capped.length).toBeLessThanOrEqual(len);
+    }
   });
 
   it("keeps a capped message array renderable as messages", async () => {

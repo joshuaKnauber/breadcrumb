@@ -40,6 +40,11 @@ const VIEWS = [
 const LIVE_WINDOW_MS = 30_000;
 const LIVE_POLL_MS = 5_000;
 
+function isLive(spans: SpanRecord[], changedAt: number): boolean {
+  const now = Date.now();
+  return now - lastActivity(spans) < LIVE_WINDOW_MS && now - changedAt < LIVE_WINDOW_MS;
+}
+
 export function TraceView() {
   const { route, go } = useNavigation();
   const traceId = route.traceId ?? "";
@@ -50,20 +55,32 @@ export function TraceView() {
   // Spans are only stored once they end, so an in-flight run arrives piecemeal.
   // Poll while the run is still producing them and stop once it goes quiet, so
   // a finished trace costs nothing to sit on.
+  // Two clocks have to agree, because they can disagree with each other. The
+  // span timestamps say the run is recent, and our own observation says it is
+  // still changing — so a server clock running ahead of the browser's can't
+  // leave a finished trace polling forever.
+  const changedAt = useRef(Date.now());
   const spansQuery = useTrace(traceId || null, {
     refetchInterval: (query) => {
       const data = query.state.data;
       if (!data || data.length === 0) return false;
-      return Date.now() - lastActivity(data) < LIVE_WINDOW_MS ? LIVE_POLL_MS : false;
+      return isLive(data, changedAt.current) ? LIVE_POLL_MS : false;
     },
   });
   const spans = useMemo(() => spansQuery.data ?? [], [spansQuery.data]);
+
+  const fingerprint = `${traceId}:${spans.length}:${lastActivity(spans)}`;
+  const seen = useRef(fingerprint);
+  if (seen.current !== fingerprint) {
+    seen.current = fingerprint;
+    changedAt.current = Date.now();
+  }
 
   // The poll that discovers a run has gone quiet often returns identical spans,
   // which re-renders nothing — so a clock, running only while live, is what
   // lets the indicator turn itself off.
   const [, setClock] = useState(0);
-  const live = spans.length > 0 && Date.now() - lastActivity(spans) < LIVE_WINDOW_MS;
+  const live = spans.length > 0 && isLive(spans, changedAt.current);
   useEffect(() => {
     if (!live) return;
     const id = setInterval(() => setClock((n) => n + 1), LIVE_POLL_MS);
@@ -99,13 +116,27 @@ export function TraceView() {
     () => traceModel(spans, { mode: view, openMinor, collapsed }),
     [spans, view, openMinor, collapsed]
   );
-  const { root, total, maxSelf, rows, totals, failed, spots, byId, childrenById } = model;
+  const { root, origin, total, maxSelf, rows, totals, failed, spots, byId, childrenById } = model;
 
   // Open on the run's worst moment rather than a collapsed root.
   useEffect(() => {
     if (spans.length === 0) return;
     setSelectedId((cur) => cur ?? defaultSelection(model));
   }, [spans.length, model]);
+
+  // Folding a span's ancestor would otherwise strand the selection on a row
+  // that no longer exists, which leaves j/k with nothing to step from and sends
+  // them back to the top. Ride the fold up to the nearest row still on screen.
+  useEffect(() => {
+    if (!selectedId || model.order.length === 0) return;
+    const visible = new Set(model.order);
+    if (visible.has(selectedId)) return;
+    let cur = byId.get(selectedId);
+    while (cur && !visible.has(cur.id)) {
+      cur = cur.parentSpanId ? byId.get(cur.parentSpanId) : undefined;
+    }
+    if (cur) setSelectedId(cur.id);
+  }, [model, selectedId, byId]);
 
   const select = useCallback((id: string) => setSelectedId(id), []);
 
@@ -182,8 +213,11 @@ export function TraceView() {
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1.02fr)_minmax(0,1fr)]">
         <div className="flex min-h-0 min-w-0 flex-col border-line lg:border-r">
           <div
-            className={`sticky top-0 z-10 items-end gap-2.5 border-b border-line bg-plate px-3 pt-2 pb-1.5 ${
-              view === "timeline" ? "flex" : "grid grid-cols-[250px_1fr]"
+            // px-[18px] matches the rows below: their scroller's px-3 plus each
+            // row's own px-1.5. Anything else and the ticks label a track they
+            // aren't aligned with.
+            className={`sticky top-0 z-10 items-end gap-2.5 border-b border-line bg-plate pt-2 pb-1.5 ${
+              view === "timeline" ? "flex px-3" : "grid grid-cols-[250px_1fr] px-[18px]"
             }`}
           >
             <ToggleGroup
@@ -200,7 +234,7 @@ export function TraceView() {
           {view === "timeline" ? (
             <Timeline
               rows={rows}
-              root={root}
+              origin={origin}
               total={total}
               maxSelf={maxSelf}
               selectedId={selectedId}
@@ -214,7 +248,7 @@ export function TraceView() {
                     <SpanRow
                       key={item.span.id}
                       row={item}
-                      root={root}
+                      origin={origin}
                       total={total}
                       maxSelf={maxSelf}
                       selected={selectedId === item.span.id}
@@ -246,7 +280,15 @@ export function TraceView() {
 
         <div className="min-h-0 min-w-0 overflow-y-auto bg-plate">
           {selected ? (
-            <SpanInspector span={selected} kids={selectedKids} total={total} maxSelf={maxSelf} />
+            // Keyed so a new selection remounts: the fold state inside belongs
+            // to the payload being shown, not to the panel's position.
+            <SpanInspector
+              key={selected.id}
+              span={selected}
+              kids={selectedKids}
+              total={total}
+              maxSelf={maxSelf}
+            />
           ) : (
             <div className="p-4 text-faint">Select a step to inspect it.</div>
           )}
@@ -479,7 +521,7 @@ export const heatFill = (
 
 function SpanRow({
   row,
-  root,
+  origin,
   total,
   maxSelf,
   selected,
@@ -487,7 +529,7 @@ function SpanRow({
   onToggleCollapsed,
 }: {
   row: Extract<TraceRow, { type: "span" }>;
-  root: SpanRecord;
+  origin: number;
   total: number;
   maxSelf: number;
   selected: boolean;
@@ -503,7 +545,7 @@ function SpanRow({
 
   const ms = extent(span);
   const self = selfTime(span, kids);
-  const left = ((span.startTime - root.startTime) / total) * 100;
+  const left = ((span.startTime - origin) / total) * 100;
   const width = Math.max((ms / total) * 100, 0.4);
   const heat = heatFill(span, self, total, maxSelf);
   const gaps = selfIntervals(span, kids);
@@ -613,7 +655,7 @@ function SpanRow({
           <Tooltip.Popup className="rounded-md border border-line bg-panel px-2.5 py-1.5 font-mono text-[11px] text-muted shadow-lg tabular-nums">
             <div className="text-fg">{displayName(span)}</div>
             <div>
-              starts +{fmtMs(span.startTime - root.startTime)} · {fmtMs(ms)} total
+              starts +{fmtMs(span.startTime - origin)} · {fmtMs(ms)} total
             </div>
             <div>
               {fmtMs(self)} self ({Math.round((self / total) * 100)}% of run)
@@ -640,14 +682,14 @@ const MIN_CANVAS = 1200;
  */
 function Timeline({
   rows,
-  root,
+  origin,
   total,
   maxSelf,
   selectedId,
   onSelect,
 }: {
   rows: TraceRow[];
-  root: SpanRecord;
+  origin: number;
   total: number;
   maxSelf: number;
   selectedId: string | null;
@@ -655,7 +697,6 @@ function Timeline({
 }) {
   const spans = rows.flatMap((r) => (r.type === "span" ? [r] : []));
   const width = Math.max(MIN_CANVAS, spans.length * PX_PER_ROW);
-  const origin = spans.reduce((min, r) => Math.min(min, r.span.startTime), root.startTime);
   const ticks = Math.max(4, Math.round(width / 180));
 
   return (

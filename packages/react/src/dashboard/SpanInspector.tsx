@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { CaretDown, CaretRight } from "./ui/icons.js";
 import { fmtCost, fmtMs } from "@breadcrumb-sh/core/kit";
 import type { SpanRecord } from "@breadcrumb-sh/core/client";
@@ -28,10 +28,9 @@ export function SpanInspector({
   total: number;
   maxSelf: number;
 }) {
+  // A new selection remounts this panel (it's keyed on the span), so every
+  // fold below starts fresh rather than inheriting the last span's state.
   const [raw, setRaw] = useState(false);
-
-  // A new selection is a fresh question: back to the rendered view.
-  useEffect(() => setRaw(false), [span.id]);
 
   const ms = (span.endTime ?? span.startTime) - span.startTime;
   const self = selfTime(span, kids);

@@ -16,9 +16,10 @@ export function capPayload(value: unknown, maxChars: number): unknown {
   // Every string gets the same allowance rather than a proportional share, so
   // one enormous field can't crowd out the short ones carrying the structure's
   // meaning — roles, keys, tool names. Halve it until the whole thing fits.
+  const floor = Math.min(MIN_ALLOWANCE, maxChars);
   let allowance = maxChars;
-  while (allowance > MIN_ALLOWANCE) {
-    allowance = Math.max(Math.floor(allowance / 2), MIN_ALLOWANCE);
+  while (allowance > floor) {
+    allowance = Math.max(Math.floor(allowance / 2), floor);
     const capped = capStrings(value, allowance);
     if (measure(capped) <= maxChars) return capped;
   }
@@ -30,9 +31,18 @@ export function capPayload(value: unknown, maxChars: number): unknown {
 
 const MIN_ALLOWANCE = 80;
 
+const marker = (dropped: number): string => `…[breadcrumb: truncated ${dropped} more chars]`;
+
+/**
+ * The marker comes out of the budget rather than being added on top, so capping
+ * a string never returns more than `maxChars` — and never returns more than it
+ * was handed, which the naive version did for anything just over the line.
+ */
 function capString(value: string, maxChars: number): string {
   if (value.length <= maxChars) return value;
-  return `${value.slice(0, maxChars)}…[breadcrumb: truncated ${value.length - maxChars} more chars]`;
+  // `value.length` bounds the dropped count, so its marker bounds the real one.
+  const room = Math.max(maxChars - marker(value.length).length, 0);
+  return value.slice(0, room) + marker(value.length - room);
 }
 
 function capStrings(value: unknown, allowance: number): unknown {

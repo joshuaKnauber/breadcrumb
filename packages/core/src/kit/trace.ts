@@ -50,6 +50,12 @@ export interface TraceModel {
    * several — `roots` holds them all, and every one is rendered. */
   root: SpanRecord | null;
   roots: SpanRecord[];
+  /**
+   * Wall-clock zero for the run's bars. Not the root's start: an orphan whose
+   * parent never arrived can begin before it, and measuring from the root would
+   * push that span off the left of the track.
+   */
+  origin: number;
   /** The run's extent, floored at 1 so it is always safe to divide by. */
   total: number;
   /** Biggest self time below the root — the scale heat is measured against. */
@@ -113,6 +119,9 @@ export function traceModel(
 
   const roots = rootSpans(spans);
   const root = roots[0] ?? null;
+  let origin = Infinity;
+  for (const s of spans) origin = Math.min(origin, s.startTime);
+  if (!Number.isFinite(origin)) origin = 0;
   const total = spans.length > 0 ? traceExtent(spans) : 1;
   const spots = spans.length > 0 ? hotspots(spans) : null;
 
@@ -193,6 +202,7 @@ export function traceModel(
   return {
     root,
     roots,
+    origin,
     total,
     maxSelf,
     rows,
