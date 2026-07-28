@@ -66,7 +66,7 @@
     "@types/node": "^22.10.2",
     "better-sqlite3": "^11.7.0",
     "tsdown": "^0.22.11",
-    "vitest": "^2.1.8"
+    "vitest": "^3.2.6"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
