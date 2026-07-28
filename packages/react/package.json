@@ -1,6 +1,6 @@
 {
   "name": "@breadcrumb-sh/react",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "The Breadcrumb tracing dashboard as a React component, plus hooks for building your own.",
   "license": "MIT",
   "homepage": "https://breadcrumb.sh",
@@ -41,7 +41,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
-    "@breadcrumb-sh/core": "0.1.0",
+    "@breadcrumb-sh/core": "0.2.0",
     "@tanstack/react-query": "^5.62.0",
     "chart.js": "^4.4.7",
     "react-chartjs-2": "^5.2.0",
