@@ -19,7 +19,7 @@
     "@astrojs/mdx": "^7.0.0",
     "@astrojs/sitemap": "^3.7.3",
     "@tailwindcss/vite": "^4.3.0",
-    "astro": "^7.0.0",
+    "astro": "^7.3.2",
     "remark-github-blockquote-alert": "^2.1.0",
     "tailwindcss": "^4.3.0"
   },
