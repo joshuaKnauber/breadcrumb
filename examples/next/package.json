@@ -11,7 +11,7 @@
     "@breadcrumb-sh/core": "0.2.0",
     "@breadcrumb-sh/react": "0.1.0",
     "better-sqlite3": "^11.7.0",
-    "next": "^15.1.0",
+    "next": "^15.5.24",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
